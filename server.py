@@ -580,6 +580,9 @@ class Config(BaseModel):
     # (e.g. 'LLAMA_ATTN_ROT_DISABLE=1 GGML_CUDA_NO_PINNED=1' / 'taskset -c 0-11').
     env: str = ""
     exec_prefix: str = ""
+    # Verbatim import mode: token list straight from a pasted CLI command.
+    # When present it REPLACES build_argv() output for preview and launch.
+    imported_argv: Optional[list[str]] = None
     model_url: str = ""
     hf_repo: str = ""
     hf_file: str = ""
@@ -791,6 +794,22 @@ class Config(BaseModel):
 _CONFIG_DEFAULTS: dict = {}
 
 
+def _verbatim_argv(d: dict) -> list | None:
+    """Raw argv from a pasted command (verbatim import mode), else None.
+
+    Rebuilding from the form would add flags the pasted command never had
+    (--no-mmap, -ctk/-ctv, --fit off, --temp...), silently changing server
+    behaviour vs. the command the user imported. While the import is unedited,
+    preview and launch must reproduce it exactly. Tokens go through Popen as a
+    list (no shell), so no further quoting is needed or wanted.
+    """
+    argv = d.get("imported_argv")
+    if not isinstance(argv, list) or not argv:
+        return None
+    argv = [str(t) for t in argv if str(t) != ""]
+    return argv or None
+
+
 def _config_defaults() -> dict:
     """Complete default config (computed once, after Config is defined)."""
     if not _CONFIG_DEFAULTS:
@@ -848,7 +867,8 @@ async def api_delete_profile(name: str):
 @app.post("/api/build-command")
 async def api_build_command(cfg: Config):
     d = cfg.model_dump()
-    return JSONResponse({"command": render_command(build_argv(d), d)})
+    argv = _verbatim_argv(d) or build_argv(d)
+    return JSONResponse({"command": render_command(argv, d), "verbatim": _verbatim_argv(d) is not None})
 
 
 @app.get("/api/info")
@@ -879,7 +899,7 @@ async def api_launch(cfg: Config):
         return JSONResponse({"error": f"Server already running (PID {running_server['pid']})"}, status_code=409)
 
     d = cfg.model_dump()
-    argv = build_argv(d)
+    argv = _verbatim_argv(d) or build_argv(d)
     wrapper = exec_wrapper(d)
 
     # Sanity checks — fail with a clear 400 instead of a llama-server that
@@ -887,6 +907,12 @@ async def api_launch(cfg: Config):
     if wrapper and not shutil.which(wrapper[0]):
         return JSONResponse({"error": f"Wrapper command not found on PATH: {wrapper[0]}"}, status_code=400)
     server_bin = Path(argv[0])
+    if not server_bin.is_absolute():
+        # Verbatim imports may name the binary bare or relative (./build/bin/llama-server);
+        # Popen resolves it the same way (PATH / cwd), so check it the same way too.
+        found = shutil.which(argv[0])
+        if found:
+            server_bin = Path(found)
     if not server_bin.is_file() or not os.access(server_bin, os.X_OK):
         return JSONResponse({"error": f"llama-server binary not found or not executable: {server_bin}"}, status_code=400)
     if not (d.get("hf_repo") or d.get("model_url")):

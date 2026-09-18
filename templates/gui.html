@@ -1213,6 +1213,14 @@ async function init() {
     if (statusEl) statusEl.textContent = 'ERROR: ' + e.message;
   }
   try { const i = await (await fetch('/api/info')).json(); if (i.home) window.__HOME = i.home; } catch (e) {}
+  // Any real field edit ends verbatim-import mode: from then on the command is
+  // rebuilt from the form again. Programmatic .value writes (setCfg) do NOT
+  // fire input events, so restoring a profile/import never clears itself.
+  window.__importedArgv = null;
+  document.addEventListener('input', (e) => {
+    if (e.target && e.target.id === 'cliPaste') return; // typing a new command must not drop the current import
+    window.__importedArgv = null;
+  }, true);
   try { await loadBinaries(); } catch(e) { console.error('loadBinaries failed', e); }
   try { await refreshProfiles(); console.log('init: profiles loaded'); } catch(e) { console.error('refreshProfiles failed', e); }
   try { updateCommand(); console.log('init: command updated'); } catch(e) { console.error('updateCommand failed', e); }
@@ -1314,6 +1322,9 @@ function getCfg() {
     }
     cfg[id] = el.value;
   });
+  // Verbatim-import mode: while set (and until any field is edited), the
+  // backend reproduces exactly this argv instead of rebuilding from the form.
+  if (window.__importedArgv && window.__importedArgv.length) cfg.imported_argv = window.__importedArgv;
   return cfg;
 }
 
@@ -1404,6 +1415,8 @@ async function saveProfile() {
 async function loadProfile(name) {
   const cfg = profiles[name];
   if (!cfg) return;
+  // A profile saved right after an import remembers its verbatim command.
+  window.__importedArgv = (Array.isArray(cfg.imported_argv) && cfg.imported_argv.length) ? cfg.imported_argv : null;
   clearActive();
   document.querySelector('.profile-item[data-name="' + name + '"]')?.classList.add('active');
   document.getElementById('profileName').value = name;
@@ -1722,7 +1735,7 @@ function parseLlamaCommand(raw) {
   const cfg = {};
   const unknown = [];
   const extra_args = [];               // verbatim safety net for flags we do not model
-  let sawSpec = false, sawAgent = false, server = '', sawFlag = false;
+  let sawSpec = false, sawAgent = false, server = '', sawFlag = false, serverIdx = -1;
   const applyKwargs = (v) => {
     try { const kj = JSON.parse(v); if (kj && kj.preserve_thinking) cfg.preserve_thinking = true; } catch (e) {}
   };
@@ -1738,7 +1751,7 @@ function parseLlamaCommand(raw) {
     const tok = tokens[i];
     // The binary is the first non-flag token before any flag shows up — it can
     // sit after env assignments/wrappers, not only at index 0.
-    if (!tok.startsWith('-') && !sawFlag && !server) { server = tok; continue; }
+    if (!tok.startsWith('-') && !sawFlag && !server) { server = tok; serverIdx = i; continue; }
     if (tok.startsWith('-')) sawFlag = true;
     if (tok.startsWith('--')) {
       const eq = tok.indexOf('=');
@@ -1802,7 +1815,11 @@ function parseLlamaCommand(raw) {
     if (intFields.includes(k)) { const n = parseInt(cfg[k], 10); if (!isNaN(n)) cfg[k] = n; }
     else if (floatFields.includes(k)) { const n = parseFloat(cfg[k]); if (!isNaN(n)) cfg[k] = n; }
   });
-  return { cfg, unknown, server };
+  // rawArgv: the ORIGINAL token list after the binary (quotes already resolved
+  // by the tokenizer). Launch/preview use it verbatim until a field is edited —
+  // rebuilding from the form instead adds flags the pasted command never had.
+  const rawArgv = tokens.slice(serverIdx < 0 ? 0 : serverIdx + 1);
+  return { cfg, unknown, server, rawArgv };
 }
 // ===PARSE-CORE-END===
 
@@ -1862,6 +1879,16 @@ function parseCliCommand() {
     full.llama_server = s;
     const custom = document.getElementById('llama_server_custom');
     if (custom) custom.value = s;
+  }
+  // Verbatim mode first: setCfg() triggers updateCommand(), which must already
+  // see the imported argv (otherwise the preview flashes the rebuilt variant).
+  window.__importedArgv = null;
+  if (parsed.rawArgv && parsed.rawArgv.length) {
+    // argv[0] must be the binary itself (rawArgv holds only the tokens AFTER it);
+    // same ~ expansion the form field got, so both views of the import agree.
+    let bin = (parsed.server || '').trim();
+    if (bin === '~' || bin.startsWith('~/')) bin = (window.__HOME || '/home/you') + bin.slice(1);
+    window.__importedArgv = [bin || String(full.llama_server || ''), ...parsed.rawArgv];
   }
   setCfg(full);
   // Auto-name from model
