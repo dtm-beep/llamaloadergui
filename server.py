@@ -4,6 +4,7 @@
 import asyncio
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -580,6 +581,11 @@ class Config(BaseModel):
     # (e.g. 'LLAMA_ATTN_ROT_DISABLE=1 GGML_CUDA_NO_PINNED=1' / 'taskset -c 0-11').
     env: str = ""
     exec_prefix: str = ""
+    # Remote (SSH) target — empty host = launch on this machine.
+    remote_host: str = ""
+    remote_ssh_port: int = 22
+    remote_bin: str = ""
+    remote_workdir: str = ""
     # Verbatim import mode: token list straight from a pasted CLI command.
     # When present it REPLACES build_argv() output for preview and launch.
     imported_argv: Optional[list[str]] = None
@@ -817,6 +823,188 @@ def _config_defaults() -> dict:
     return dict(_CONFIG_DEFAULTS)
 
 
+# ── Remote (SSH) targets ───────────────────────────────────────────────
+# First-class headless support: launch llama-server on another machine over
+# SSH, detached (nohup) with a pidfile + log under ~/.llamaloader there, so
+# the server survives the SSH session closing and status/logs/stop all work
+# without the GUI holding a tunnel open. Key-based auth only: BatchMode
+# guarantees we never hang on a passphrase/password prompt nobody can answer
+# (ssh-askpass is absent on this KDE box).
+
+import asyncio as _aio
+
+# Desktop launchers do not always carry the session environment; point at the
+# systemd ssh-agent socket (enabled on this box) when nothing else is set, or
+# every remote launch dies on a key that is actually sitting in the agent.
+if not os.environ.get("SSH_AUTH_SOCK"):
+    _rt = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    _agent = os.path.join(_rt, "ssh-agent.socket")
+    if os.path.exists(_agent):
+        os.environ["SSH_AUTH_SOCK"] = _agent
+
+SSH_RE = re.compile(r"^[A-Za-z0-9_.@:+-]+$")       # user@host / host / ipv6-zone-safe
+REMOTE_DIR = "~/.llamaloader"
+
+
+def _remote_target(d: dict) -> dict | None:
+    """Validate remote fields; None = local launch. Raises ValueError (400)."""
+    host = str(d.get("remote_host") or "").strip()
+    if not host:
+        return None
+    if not SSH_RE.match(host):
+        raise ValueError(f"Invalid SSH target: {host!r} (allowed: [user@]host)")
+    try:
+        ssh_port = int(d.get("remote_ssh_port") or 22)
+    except (TypeError, ValueError):
+        raise ValueError("Invalid SSH port")
+    rb = str(d.get("remote_bin") or "").strip()
+    rb = rb if rb.startswith(("/", "~", "./")) else ("~/" + rb)
+    workdir = str(d.get("remote_workdir") or "").strip() or None
+    if workdir and not workdir.startswith(("/", "~", "./")):
+        raise ValueError(f"Invalid remote workdir: {workdir!r} (must be an absolute path)")
+    return {"host": host, "ssh_port": ssh_port, "bin": rb, "workdir": workdir}
+
+
+def _ssh_base(t: dict) -> list:
+    return [
+        "ssh",
+        "-p", str(t["ssh_port"]),
+        "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ConnectTimeout=10",
+        t["host"],
+    ]
+
+
+async def _run_ssh(t: dict, remote_cmd: str, timeout: float = 20) -> tuple[int, str, str]:
+    """Run one SSH command; returns (rc, stdout, stderr). Never raises."""
+    argv = [*_ssh_base(t), remote_cmd]
+    try:
+        proc = await _aio.create_subprocess_exec(
+            *argv, stdout=_aio.subprocess.PIPE, stderr=_aio.subprocess.PIPE)
+        out, err = await _aio.wait_for(proc.communicate(), timeout=timeout)
+        return proc.returncode, out.decode(errors="replace"), err.decode(errors="replace")
+    except _aio.TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        return 124, "", f"ssh: timed out after {timeout}s"
+    except OSError as e:
+        return 127, "", f"ssh: {e}"
+
+
+def _rq(path: str) -> str:
+    """Quote a remote path but keep a leading ~ expanded by the REMOTE shell
+    (shlex.quote would wrap it in single quotes and kill the tilde)."""
+    if path == "~":
+        return "~"
+    if path.startswith("~/"):
+        return "~" + shlex.quote(path[1:])
+    if path.startswith("~") and len(path) > 1:
+        # ~user/rest — expand user, quote the rest
+        rest = path[1:].split("/", 1)
+        return "~" + rest[0] + (shlex.quote("/" + rest[1]) if len(rest) > 1 else "")
+    return shlex.quote(path)
+
+
+def _remote_files(t: dict, listen_port: int) -> tuple[str, str]:
+    """(log, pidfile) on the target — keyed by llama-server LISTEN port, so two
+    servers on one target (8080/8081) do not fight over one pidfile."""
+    p = int(listen_port)
+    return (f"{REMOTE_DIR}/llama-server-{p}.log", f"{REMOTE_DIR}/llama-server-{p}.pid")
+
+
+def _remote_launch_script(argv: list, t: dict, env: dict | None, listen_port: int) -> str:
+    """POSIX snippet run on the target: detach (nohup), pidfile, log.
+
+    Tokens are shlex-quoted; env assignments go INSIDE the nohup subshell (an
+    `env A=1 nohup …` outer prefix dies with the shell). Log/pidfile are
+    expanded remotely ($HOME), consistent with the status/stop/tail commands
+    which resolve them the same way.
+    """
+    toks = [str(x) for x in argv]
+    # argv[0] (the binary) may be ~/, ~user/, ./. or absolute: keep tilde/relative
+    # readable for the remote shell; model paths etc. may also be ~ - quote via _rq.
+    body = " ".join(_rq(x) if (x.startswith(("~/", "~", "./")) or x == "~") else shlex.quote(x) for x in toks)
+    env_str = " ".join(f"{k}={shlex.quote(str(v))}" for k, v in (env or {}).items())
+    inner = f"{env_str} {body}" if env_str else body
+    log, pid = _remote_files(t, listen_port)
+    cd = f"cd {_rq(t['workdir'])} || exit 2; " if t.get("workdir") else ""
+    return (
+        f"mkdir -p {REMOTE_DIR}; {cd}"
+        f"( nohup {inner} > {log} 2>&1 < /dev/null & echo $! > {pid} )"
+    )
+
+
+# Status is decided ON THE TARGET (a TCP probe from this machine would test
+# this machine's own port, or miss a server bound to the target's loopback).
+#  RUNNING <pid> — pidfile process alive (ours, or a previous run of this GUI)
+#  BUSY        — nothing in our pidfile, but something listens on the port there
+#  NOT_RUNNING — nothing
+# Pidfile-reuse guard: a stale pid file can point at a recycled PID belonging
+# to something else entirely (sshd, a database, even a hand-started
+# llama-server). Both status and stop check the process name against the
+# binary this GUI launched and ignore the pidfile when it does not match.
+_REMOTE_PROG = ""
+
+REMOTE_STATUS_CMD = (
+    "d=$HOME/.llamaloader; p=$(cat $d/llama-server-{port}.pid 2>/dev/null); "
+    "c=; [ -n \"$p\" ] && c=$(cat /proc/$p/comm 2>/dev/null || ps -p $p -o comm= 2>/dev/null); "
+    "if [ -n \"$p\" ] && kill -0 \"$p\" 2>/dev/null; then "
+    "case \"$c\" in \"{expect}\"*) echo \"RUNNING $p\";; *) echo STALE; esac; "
+    "elif bash -c \"exec 3<>/dev/tcp/127.0.0.1/{port}\" 2>/dev/null; then echo BUSY; "
+    "else echo NOT_RUNNING; fi"
+)
+
+REMOTE_STOP_CMD = (
+    "d=$HOME/.llamaloader; p=$(cat $d/llama-server-{port}.pid 2>/dev/null); "
+    "if [ -z \"$p\" ]; then echo NOPID; exit 0; fi; "
+    "c=$(cat /proc/$p/comm 2>/dev/null || ps -p $p -o comm= 2>/dev/null); "
+    "if ! kill -0 \"$p\" 2>/dev/null; then echo GONE; rm -f $d/llama-server-{port}.pid; exit 0; fi; "
+    "case \"$c\" in "
+    "\"{expect}\"*) kill \"$p\" && echo \"KILLED $p\";; "
+    "*) echo \"REFUSED pid=$p comm=$c\";; esac"
+)
+
+
+def _remembered(host: str, ssh_port: int) -> dict | None:
+    """The target this GUI actually launched (bin survives a form edit)."""
+    r = running_server.get("remote")
+    if r and r["host"] == host and int(r["ssh_port"]) == int(ssh_port):
+        return r
+    return None
+
+
+def _remote_expect(t: dict) -> str:
+    """Process-name the pidfile must belong to (basename of the launched bin).
+
+    /proc/PID/comm is truncated to 15 chars by Linux, so the expected value is
+    truncated identically and matched as a prefix. Placeholder/empty bins fall
+    back to "llama", which is what a real llama-server reports as.
+    """
+    base = os.path.basename(str(t.get("bin") or "")).split(" ")[0]
+    if not base or base == "true":
+        base = "llama"
+    return base[:15]
+
+
+async def _remote_status(t: dict, listen_port: int) -> tuple[str, int | None]:
+    """('running'|'busy'|'down', pid) as seen on the target."""
+    rc, out, _err = await _run_ssh(
+        t, REMOTE_STATUS_CMD.format(port=listen_port, expect=_remote_expect(t)), timeout=15)
+    out = out.strip()
+    if out.startswith("RUNNING"):
+        try:
+            return "running", int(out.split()[1])
+        except (IndexError, ValueError):
+            return "running", None
+    if out == "BUSY":
+        return "busy", None
+    return "down", None
+
+
+
 # ── Routes ───────────────────────────────────────────────────────
 
 @app.get("/", response_class=RedirectResponse)
@@ -868,12 +1056,48 @@ async def api_delete_profile(name: str):
 async def api_build_command(cfg: Config):
     d = cfg.model_dump()
     argv = _verbatim_argv(d) or build_argv(d)
+    try:
+        t = _remote_target(d)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if t:
+        argv = [t["bin"], *argv[1:]]
+        return JSONResponse({
+            "command": f"ssh {shlex.quote(t['host'])} -p {t['ssh_port']} " + shlex.quote(_remote_launch_script([t["bin"], *argv[1:]], t, launch_env(d), d["port"])),
+            "verbatim": _verbatim_argv(d) is not None,
+            "remote": t["host"],
+        })
     return JSONResponse({"command": render_command(argv, d), "verbatim": _verbatim_argv(d) is not None})
 
 
 @app.get("/api/info")
 async def api_info():
     return JSONResponse({"home": str(Path.home()), "default_binary": str(LLAMA_SERVER)})
+
+
+@app.post("/api/ssh-test")
+async def api_ssh_test(payload: dict):
+    host = str(payload.get("remote_host") or "").strip()
+    try:
+        t = _remote_target({**payload, "remote_host": host})
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if not t:
+        return JSONResponse({"error": "Fill in the SSH target first"}, status_code=400)
+    if not shutil.which("ssh"):
+        return JSONResponse({"error": "ssh client not found on PATH"}, status_code=400)
+    rc, out, err = await _run_ssh(t, "echo llamaloader-ok; uname -sr", timeout=15)
+    if rc == 0 and "llamaloader-ok" in out:
+        lines = out.strip().splitlines()
+        return JSONResponse({"ok": True, "host": t["host"], "uname": lines[1] if len(lines) > 1 else ""})
+    hint = ""
+    if "Permission denied" in err or "Permission denied" in out:
+        hint = " — key auth failed: add this machine's key to the target (ssh-copy-id) and/or load it in the agent"
+    elif "timed out" in err:
+        hint = " — host unreachable or sshd not answering"
+    elif "Host key verification" in err:
+        hint = " — unknown host key (the GUI accepts new ones automatically; a changed key must be removed from ~/.ssh/known_hosts by hand)"
+    return JSONResponse({"ok": False, "error": (err or out or "ssh failed").strip()[:300] + hint}, status_code=400)
 
 
 async def _port_in_use(port: int, host: str = "127.0.0.1") -> bool:
@@ -900,6 +1124,36 @@ async def api_launch(cfg: Config):
 
     d = cfg.model_dump()
     argv = _verbatim_argv(d) or build_argv(d)
+
+    # ── Remote branch: detached launch over SSH ──
+    try:
+        t = _remote_target(d)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if t:
+        if not shutil.which("ssh"):
+            return JSONResponse({"error": "ssh client not found on PATH"}, status_code=400)
+        # A detached remote server leaves no local child to poll, so the usual
+        # "already running" guard cannot see it — ask the target instead.
+        state, prior = await _remote_status(t, d["port"])
+        if state == "running":
+            return JSONResponse({"error": f"Server already running on {t['host']} "
+                                          f"(PID {prior}) — Stop it first"}, status_code=409)
+        if state == "busy":
+            return JSONResponse({"error": f"Port {d['port']} is already in use on {t['host']} "
+                                          f"(started outside this GUI) — free it or pick another port"},
+                                status_code=409)
+        argv = [t["bin"], *argv[1:]]
+        script = _remote_launch_script(argv, t, launch_env(d), d["port"])
+        rc, out, err = await _run_ssh(t, script, timeout=25)
+        if rc != 0:
+            return JSONResponse({"error": f"ssh launch failed ({rc}): {(err or out or '').strip()[:300]}"}, status_code=400)
+        # read back the pid the script wrote on the target
+        rc2, out2, _ = await _run_ssh(t, f"cat {_remote_files(t, d['port'])[1]} 2>/dev/null", timeout=10)
+        pid = int(out2.strip()) if rc2 == 0 and out2.strip().isdigit() else None
+        running_server = {"pid": pid, "proc": None, "remote": t}
+        return JSONResponse({"pid": pid, "remote": t["host"], "command": render_command(argv, d)})
+
     wrapper = exec_wrapper(d)
 
     # Sanity checks — fail with a clear 400 instead of a llama-server that
@@ -938,8 +1192,43 @@ async def api_launch(cfg: Config):
 
 
 @app.post("/api/stop")
-async def api_stop():
+async def api_stop(request: Request):
     global running_server
+    # Body carries the current form (remote target); old callers post nothing,
+    # which must keep working as a plain local stop.
+    d = {}
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            d = body
+    except Exception:
+        pass
+    # Remote: terminate by the pidfile this GUI (or a previous run of it) wrote.
+    t = _remote_target(d) if d.get("remote_host") else running_server.get("remote")
+    if t and not t.get("bin"):
+        mem = _remembered(t["host"], t["ssh_port"])
+        if mem:
+            t["bin"] = mem["bin"]
+    elif t:
+        mem = _remembered(t["host"], t["ssh_port"])
+        # An empty remote_bin in the form means "the one I launched", not "llama".
+        if mem and not str(d.get("remote_bin") or "").strip():
+            t["bin"] = mem["bin"]
+    if t and not running_server.get("proc"):
+        port = int(d.get("port") or 8080)
+        rc, out, err = await _run_ssh(
+            t, REMOTE_STOP_CMD.format(port=port, expect=_remote_expect(t)), timeout=15)
+        out = (out or "").strip()
+        if out.startswith("KILLED"):
+            return JSONResponse({"status": "stopped", "pid": out.split()[1], "remote": t["host"]})
+        if out in ("NOPID", "GONE"):
+            return JSONResponse({"status": "not running", "remote": t["host"]})
+        if out.startswith("REFUSED"):
+            # Pidfile pointed at a recycled PID — never kill it; tell the user.
+            return JSONResponse({"error": f"stale pid file on target ({out}); "
+                                          f"left untouched — remove ~/.llamaloader/llama-server-{port}.pid there"},
+                                status_code=400)
+        return JSONResponse({"status": "not running", "remote": t["host"], "detail": (err or out).strip()[:200]})
     if running_server["proc"] and running_server["proc"].poll() is None:
         running_server["proc"].terminate()
         if running_server.get("log"):
@@ -950,10 +1239,31 @@ async def api_stop():
 
 
 @app.get("/api/status")
-async def api_status(port: int = 8080):
+async def api_status(port: int = 8080, remote_host: str = "", remote_ssh_port: int = 22,
+                     remote_bin: str = ""):
     """GUI-owned child takes precedence; otherwise probe the model port so an
-    externally started llama-server (terminal, hermes, lm studio) is visible."""
+    externally started llama-server (terminal, hermes, lm studio) is visible.
+
+    Remote mode (remote_host set): status comes from the pidfile on the target;
+    an 'external' server there cannot be distinguished from one started by
+    hand, so the TCP probe runs from this machine against host:port."""
     global running_server
+    if remote_host:
+        try:
+            t = _remote_target({"remote_host": remote_host, "remote_ssh_port": remote_ssh_port,
+                                "remote_bin": remote_bin})
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        if not str(remote_bin or "").strip():
+            mem = _remembered(t["host"], t["ssh_port"])
+            if mem:
+                t["bin"] = mem["bin"]
+        state, pid = await _remote_status(t, port)
+        if state == "running":
+            return JSONResponse({"status": "running", "pid": pid, "port_busy": True, "remote": t["host"]})
+        if state == "busy":
+            return JSONResponse({"status": "external", "port_busy": True, "remote": t["host"]})
+        return JSONResponse({"status": "stopped", "port_busy": False, "remote": t["host"]})
     if running_server["proc"] and running_server["proc"].poll() is None:
         return JSONResponse({"status": "running", "pid": running_server["pid"], "port_busy": True})
     if await _port_in_use(port):
@@ -962,8 +1272,21 @@ async def api_status(port: int = 8080):
 
 
 @app.get("/api/logs")
-async def api_logs(limit: int = 50):
+async def api_logs(limit: int = 50, remote_host: str = "", remote_ssh_port: int = 22,
+                   port: int = 8080, remote_bin: str = ""):
     limit = max(1, min(int(limit), 1000))
+    if remote_host:
+        # Remote log lives on the target — tail it there and ship the text.
+        try:
+            t = _remote_target({"remote_host": remote_host, "remote_ssh_port": remote_ssh_port,
+                                "remote_bin": remote_bin})
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        log, _ = _remote_files(t, port)
+        rc, out, err = await _run_ssh(t, f"tail -n {limit} {log} 2>/dev/null", timeout=15)
+        if rc != 0:
+            return JSONResponse({"lines": [], "error": err.strip()[:200]})
+        return JSONResponse({"lines": [ln for ln in out.splitlines() if ln.strip()], "remote": t["host"]})
     log_file = Path("llama-server.log")
     if not log_file.exists():
         return JSONResponse({"lines": []})

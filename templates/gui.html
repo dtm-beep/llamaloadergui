@@ -304,9 +304,34 @@
         </div>
       </div>
 
-      <!-- CPU -->
+      <!-- Remote (SSH) — headless targets -->
       <div class="section">
-        <div class="section-header" onclick="toggleSection(this)">CPU <span>▾</span></div>
+        <div class="section-header" onclick="toggleSection(this)">Remote / SSH <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="SSH target for headless launch">Target</label>
+            <input type="text" id="remote_host" placeholder="user@192.168.1.50 (empty = this machine)" title="Run llama-server on another machine over SSH. Empty = local. Key-based auth only (BatchMode): the target must accept this machine's key (ssh-copy-id). The server is started detached (nohup) with log + pid file in ~/.llamaloader/ on the target, so it keeps running after the GUI closes." onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="SSH port on the target">SSH port</label>
+            <input type="number" id="remote_ssh_port" value="22" title="TCP port of sshd on the target (not the llama-server port)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Path of llama-server on the target">Remote binary</label>
+            <input type="text" id="remote_bin" placeholder="~/llama.cpp/build/bin/llama-server" title="Absolute path (or ~/) of the llama-server binary ON THE TARGET. Used instead of the local binary dropdown when a target is set." onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Working directory on the target">Remote workdir</label>
+            <input type="text" id="remote_workdir" placeholder="optional — cd here first" title="Optional directory to cd into on the target before launching (absolute or ~/). Relative model paths resolve against it." onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <button class="btn btn-sm" style="background:var(--surface2);color:var(--text);" onclick="testRemote()" data-tip="Check that SSH key auth to the target works">Test connection</button>
+            <span id="remoteTestResult" style="font-size:11px;margin-left:8px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CPU -->
         <div class="section-body">
           <div class="sub-header">Threads & Priority</div>
           <div class="field">
@@ -1420,7 +1445,10 @@ async function loadProfile(name) {
   clearActive();
   document.querySelector('.profile-item[data-name="' + name + '"]')?.classList.add('active');
   document.getElementById('profileName').value = name;
-  setCfg(cfg);
+  // Merge over the defaults: a profile saved before a field existed (e.g. the
+  // SSH target fields) must not inherit whatever the form happens to hold from
+  // the previous action — that silently redirects launches to a remote host.
+  setCfg(Object.assign({}, serverDefaults(), cfg));
 }
 
 async function deleteProfile(name) {
@@ -1479,28 +1507,49 @@ async function launchServer() {
 }
 
 async function stopServer() {
-  const r = await fetch('/api/stop', { method: 'POST' });
+  // Body carries the current form so the backend knows which remote target
+  // to signal; an empty body keeps the old local-only semantics.
+  const r = await fetch('/api/stop', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(getCfg()) });
   if (r.ok) { toast('Server stopped', 'success'); updateStatus(); }
+}
+
+async function testRemote() {
+  const out = document.getElementById('remoteTestResult');
+  out.textContent = 'testing…'; out.style.color = 'var(--muted)';
+  try {
+    const r = await fetch('/api/ssh-test', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(getCfg()) });
+    const d = await r.json();
+    if (r.ok && d.ok) { out.textContent = '✓ ' + (d.uname || d.host); out.style.color = 'var(--green, #6c6)'; }
+    else { out.textContent = '✕ ' + (d.error || 'failed').slice(0, 120); out.style.color = 'var(--red, #e66)'; }
+  } catch (e) {
+    out.textContent = '✕ ' + e.message; out.style.color = 'var(--red, #e66)';
+  }
 }
 
 async function updateStatus() {
   const port = parseInt(document.getElementById('port').value) || 8080;
+  const rh = (document.getElementById('remote_host').value || '').trim();
+  const rp = parseInt(document.getElementById('remote_ssh_port').value) || 22;
   let data = {};
-  try { data = await (await fetch('/api/status?port=' + port)).json(); } catch (e) { return; }
+  const rb = (document.getElementById('remote_bin').value || '').trim();
+  const qs = '?port=' + port + (rh ? '&remote_host=' + encodeURIComponent(rh) + '&remote_ssh_port=' + rp + '&remote_bin=' + encodeURIComponent(rb) : '');
+  try { data = await (await fetch('/api/status' + qs)).json(); } catch (e) { return; }
   const badge = document.getElementById('statusBadge');
   const text = document.getElementById('statusText');
   const launchBtn = document.getElementById('launchBtn');
   const stopBtn = document.getElementById('stopBtn');
+  const where = data.remote ? ' @' + data.remote : '';
   if (data.status === 'running') {
     badge.className = 'status-badge running';
-    text.textContent = 'Running (PID ' + data.pid + ')';
+    text.textContent = 'Running (PID ' + data.pid + ')' + where;
     launchBtn.style.display = 'none';
     stopBtn.style.display = '';
   } else if (data.status === 'external') {
     // A llama-server owns the port but was NOT started by this GUI — show it,
     // keep Launch available (it will be refused with a clear message), hide Stop.
     badge.className = 'status-badge external';
-    text.textContent = 'External server on :' + port + ' (not GUI-owned)';
+    text.textContent = 'External server on :' + port + where + ' (not GUI-owned)';
     launchBtn.style.display = '';
     stopBtn.style.display = 'none';
   } else {
@@ -1512,8 +1561,12 @@ async function updateStatus() {
 }
 
 async function fetchLogs() {
+  const rh = (document.getElementById('remote_host').value || '').trim();
+  const rp = parseInt(document.getElementById('remote_ssh_port').value) || 22;
   try {
-    const r = await fetch('/api/logs?limit=100');
+  const rb = (document.getElementById('remote_bin').value || '').trim();
+  const lp = parseInt(document.getElementById('port').value) || 8080;
+  const r = await fetch('/api/logs?limit=100&port=' + lp + (rh ? '&remote_host=' + encodeURIComponent(rh) + '&remote_ssh_port=' + rp + '&remote_bin=' + encodeURIComponent(rb) : ''));
     const data = await r.json();
     document.getElementById('logsBox').textContent = data.lines.join('\n') || 'No logs yet.';
   } catch (e) { /* GUI unreachable — keep last log box contents */ }
@@ -1830,6 +1883,7 @@ function serverDefaults() {
   return {
     host:'127.0.0.1', port:8080, pipeline:1, parallel:1, alias:'',
     model_url:'', hf_repo:'', hf_file:'', env:'', exec_prefix:'',
+    remote_host:'', remote_ssh_port:22, remote_bin:'', remote_workdir:'',
     threads:6, threads_batch:0, prio:0, poll:50, prio_batch:0,
     cpu_mask:'', cpu_range:'', cpu_strict:false, cpu_mask_batch:'', cpu_range_batch:'', cpu_strict_batch:false,
     ngl:-1, device:'', split_mode:'layer', tensor_split:'', main_gpu:0, fit:true, fit_target:'1024',
