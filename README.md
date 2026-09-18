@@ -9,9 +9,20 @@ line, starts it, tails its log, and stops it. Model files and the
 `llama-server` binary itself are yours; nothing here talks to any service
 outside your machine(s).
 
-![Llama Loader GUI: profile list on the left, grouped settings (model, network,
-SSH target, GPU offloading, batch/context) in the middle, command preview and
-server log tail on the right, with Save/Launch pinned to the bottom bar](docs/screenshot.jpg)
+Default view — every setting section collapsible, flowing in two columns on a
+wide screen, command preview and launch pinned to the bottom bar:
+
+![Llama Loader GUI default (wide) view: profile list on the left; settings —
+model, network, remote/SSH, CPU, GPU offloading, batch/context, sampling and
+more — as collapsible sections flowing two-up; Save/Launch pinned to the bottom
+bar](docs/screenshot.jpg)
+
+With the log rail shown (one click, or screens under 1500px): the form moves to
+one column and the right rail carries the live command preview and the
+`llama-server` log tail:
+
+![Llama Loader GUI with the log rail visible: one-column form on the left,
+Command Preview and the rolling server log on the right](docs/screenshot-logs.jpg)
 
 ## Features
 
