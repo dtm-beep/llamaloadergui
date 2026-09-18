@@ -310,7 +310,7 @@
         <div class="section-body">
           <div class="field">
             <label title="SSH target for headless launch">Target</label>
-            <input type="text" id="remote_host" placeholder="user@192.168.1.50 (empty = this machine)" title="Run llama-server on another machine over SSH. Empty = local. Key-based auth only (BatchMode): the target must accept this machine's key (ssh-copy-id). The server is started detached (nohup) with log + pid file in ~/.llamaloader/ on the target, so it keeps running after the GUI closes." onchange="updateCommand()"/>
+            <input type="text" id="remote_host" placeholder="user@gpu-box (empty = this machine)" title="Run llama-server on another machine over SSH. Empty = local. Key-based auth only (BatchMode): the target must accept this machine's key (ssh-copy-id). The server is started detached (nohup) with log + pid file in ~/.llamaloader/ on the target, so it keeps running after the GUI closes." onchange="updateCommand()"/>
           </div>
           <div class="field">
             <label title="SSH port on the target">SSH port</label>
@@ -1289,7 +1289,7 @@ async function loadBinaries() {
   });
   if (!bins.length) {
     const o = document.createElement('option');
-    o.value = '/home/you/llama.cpp/build/bin/llama-server';
+    o.value = (window.__HOME || '') + '/llama.cpp/build/bin/llama-server';
     o.textContent = 'no builds found — set path below';
     sel.appendChild(o);
   }
@@ -1928,7 +1928,7 @@ function parseCliCommand() {
   // happened to show — i.e. possibly a different llama.cpp build).
   if (parsed.server) {
     let s = parsed.server.trim();
-    if (s === '~' || s.startsWith('~/')) s = (window.__HOME || '/home/you') + s.slice(1);
+    if (s === '~' || s.startsWith('~/')) s = (window.__HOME || '/home/user') + s.slice(1);
     if (!s.startsWith('/')) s = s; // leave relative paths alone; server resolves them
     full.llama_server = s;
     const custom = document.getElementById('llama_server_custom');
@@ -1941,7 +1941,7 @@ function parseCliCommand() {
     // argv[0] must be the binary itself (rawArgv holds only the tokens AFTER it);
     // same ~ expansion the form field got, so both views of the import agree.
     let bin = (parsed.server || '').trim();
-    if (bin === '~' || bin.startsWith('~/')) bin = (window.__HOME || '/home/you') + bin.slice(1);
+    if (bin === '~' || bin.startsWith('~/')) bin = (window.__HOME || '/home/user') + bin.slice(1);
     window.__importedArgv = [bin || String(full.llama_server || ''), ...parsed.rawArgv];
   }
   setCfg(full);

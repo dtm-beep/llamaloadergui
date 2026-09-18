@@ -22,7 +22,10 @@ from pydantic import BaseModel, Field
 app = FastAPI()
 
 LMSTUDIO_DIR = Path.home() / ".lmstudio" / "models"
-LLAMA_SERVER = Path("/home/you/llama.cpp/build/bin/llama-server")
+# Conventional build location (~ = launching user's home). Missing path is
+# handled as a clean "binary not found" 400 at launch, or overridden per
+# profile / the binary dropdown / the Remote-binary field.
+LLAMA_SERVER = Path.home() / "llama.cpp" / "build" / "bin" / "llama-server"
 PROFILES_FILE = Path("profiles.json")
 
 # Track running server
