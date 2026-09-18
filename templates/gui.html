@@ -1763,6 +1763,18 @@ function parseLlamaCommand(raw) {
     q.push(qm);
   }
 
+  // -1) Copied-from-a-terminal prompts. A paste that still carries its prompt
+  //    (fish / powerlevel10k / oh-my-posh: "❯ llama-server -m …", bash "$ …",
+  //    PowerShell "PS C:\>") made the PROMPT GLYPH the binary: argv[0] became
+  //    "❯", the env assignments and taskset wrapper fell into the flag loop
+  //    instead of the Env/Wrapper fields, and a launch tried to exec "❯".
+  //    Leading tokens only — nothing after the binary can be a prompt.
+  const isPrompt = (s) =>
+    /^[\$%>›»❯➜→]+$/.test(s) ||                       // ❯  $  %  >  >>
+    /^[^\s]*[@:][^\s]*[#$%>]$/.test(s);              // user@host:~$   C:\>
+  while (tokens.length && isPrompt(tokens[0])) { tokens.shift(); q.shift(); }
+  if (tokens[0] === 'PS' && tokens.length > 1 && isPrompt(tokens[1])) { tokens.splice(0, 2); q.splice(0, 2); }
+
   // 0) Launch environment and wrappers. `FOO=bar taskset -c 0-11 ./llama-server ...`
   //    is how the process really gets started; these are NOT llama-server flags,
   //    so they must be captured (dropping them silently changes behaviour).
