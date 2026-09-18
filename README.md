@@ -173,3 +173,19 @@ a single FastAPI module (`server.py`).
   format.
 - No telemetry, no outbound requests — the only things this program connects
   to are your own machines (localhost, and the SSH target you fill in).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+You may use, copy, modify, redistribute, even sell this; the only condition is
+that the copyright notice and license text travel with every copy, which is
+where the credit lives:
+
+```text
+Copyright (c) 2026 DTM-beep — https://github.com/DTM-beep
+```
+
+If you fork or vendor this, keeping that line intact (and ideally a link back
+to this repo in your README) is all I ask — it is also the one thing the
+license actually requires.
