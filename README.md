@@ -9,6 +9,10 @@ line, starts it, tails its log, and stops it. Model files and the
 `llama-server` binary itself are yours; nothing here talks to any service
 outside your machine(s).
 
+![Llama Loader GUI: profile list on the left, grouped settings (model, network,
+SSH target, GPU offloading, batch/context) in the middle, command preview and
+server log tail on the right, with Save/Launch pinned to the bottom bar](docs/screenshot.jpg)
+
 ## Features
 
 - **Profile system** — save/load named profiles (model + all settings) to `profiles.json`
@@ -32,7 +36,7 @@ Python **3.10+**.
 ## Installation
 
 ```bash
-git clone git@github.com:DTM-beep/llamaloadergui.git   # or HTTPS: …/llamaloadergui.git
+git clone git@github.com:dtm-beep/llamaloadergui.git   # or HTTPS: …/llamaloadergui.git
 cd llamaloadergui
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
@@ -160,8 +164,14 @@ remote mode: a pasted command runs verbatim **on the target**.
 ## Development
 
 ```bash
-.venv/bin/python tests/test_remote.py    # remote-path tests, no network needed
+.venv/bin/python tests/test_remote.py       # remote-path tests, no network needed
+.venv/bin/python tests/test_markup.py       # templates/gui.html tag balance & structure
+.venv/bin/python tests/test_parse_core.py   # CLI-import parser (driven under node)
 ```
+
+`test_markup.py` is the one that matters most when touching `templates/gui.html`:
+a single unbalanced `<div>` silently collapses the whole layout (the template
+engine renders it happily — only the browser notices).
 
 The GUI is served as a single template (`templates/gui.html`); the backend is
 a single FastAPI module (`server.py`).
