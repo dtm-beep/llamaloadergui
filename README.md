@@ -197,19 +197,27 @@ a single FastAPI module (`server.py`).
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Built entirely on permissively licensed
-software (MIT/BSD: FastAPI, uvicorn, Jinja2 & friends); no third-party code
-is bundled here — dependencies are fetched from PyPI at install time, each
-with its own license.
-
-You may use, copy, modify, redistribute, even sell this; the only condition is
-that the copyright notice and license text travel with every copy, which is
-where the credit lives:
+GPL-3.0-or-later — see [LICENSE](LICENSE).
 
 ```text
 Copyright (c) 2026 DTM-beep — https://github.com/DTM-beep
+SPDX-License-Identifier: GPL-3.0-or-later
 ```
 
-If you fork or vendor this, keeping that line intact (and ideally a link back
-to this repo in your README) is all I ask — it is also the one thing the
-license actually requires.
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE. See the GNU General Public License for more details —
+you should have received a copy of the license along with this program
+(`<https://www.gnu.org/licenses/gpl-3.0.html>`).
+
+What this means in practice: use it however you like, but any modified
+version or derivative you distribute must ship under the same GPL and come
+with its source — the freedoms travel with the code, in both directions.
+
+The dependency set is GPL-compatible: everything this app is built on
+(FastAPI, uvicorn, Jinja2 & friends) is MIT/BSD-licensed, no third-party code
+is bundled here — dependencies are fetched from PyPI at install time, each
+with its own (permissive) license.

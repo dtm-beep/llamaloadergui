@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
 """Markup balance test for templates/gui.html — no dependencies.
 
 Why this exists: commit 0aef54a added the "Remote / SSH" section by *replacing*

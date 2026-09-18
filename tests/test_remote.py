@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
 """Direct tests for the remote (SSH) code paths — no ssh, no network.
 
 server._run_ssh is replaced with an in-process emulator of the target machine

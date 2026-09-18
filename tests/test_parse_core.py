@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
 """Parser tests for the paste-a-command import path — needs node, no network.
 
 Why this exists: pasting a command straight from a terminal (prompt glyph and

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
 """Llama Loader GUI — scan models, save profiles, launch llama-server."""
 
 import asyncio
