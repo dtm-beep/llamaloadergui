@@ -176,7 +176,10 @@ a single FastAPI module (`server.py`).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Built entirely on permissively licensed
+software (MIT/BSD: FastAPI, uvicorn, Jinja2 & friends); no third-party code
+is bundled here — dependencies are fetched from PyPI at install time, each
+with its own license.
 
 You may use, copy, modify, redistribute, even sell this; the only condition is
 that the copyright notice and license text travel with every copy, which is
