@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+llama-server.log
+profiles.json.bak*
+profiles.corrupt-*.json
+server.py.bak*
+templates/*.bak*
+profiles.json

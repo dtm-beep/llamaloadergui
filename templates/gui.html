@@ -1,0 +1,1970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Llama Loader GUI v2</title>
+<!-- Cache buster: 20260917-05 -->
+<style>
+  :root {
+    --bg: #15181d; --surface: #1c2026; --surface2: #232830;
+    --border: #2b313b; --border-soft: #242a33;
+    --text: #d7dde6; --text-dim: #98a2b3; --text-mut: #66707f;
+    --accent: #5a9cf8; --accent-dim: rgba(90,156,248,.12);
+    --green: #4ec97f; --red: #f0647a; --orange: #f0a35e; --yellow: #d8b25e; --cyan: #62c3d6;
+    --input-bg: #171b21; --radius: 8px;
+    --mono: ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); height: 100vh; display: flex; font-size: 13px; -webkit-font-smoothing: antialiased; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 250px; background: var(--surface); border-right: 1px solid var(--border-soft); display: flex; flex-direction: column; flex-shrink: 0; height: 100vh; }
+  .sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border-soft); font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; letter-spacing: .2px; }
+  .sidebar-header svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+  .profile-list { flex: 1; overflow-y: auto; padding: 6px; }
+  .profile-item { padding: 8px 10px; margin: 2px 0; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background .12s; font-size: 12.5px; color: var(--text-dim); }
+  .profile-item:hover { background: var(--surface2); color: var(--text); }
+  .profile-item.active { background: var(--accent-dim); color: var(--accent); }
+  .profile-item .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .profile-item .delete-btn { opacity: 0; background: transparent; color: var(--red); border: none; border-radius: 4px; width: 20px; height: 20px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .profile-item:hover .delete-btn { opacity: 1; }
+  .profile-item.active .delete-btn { opacity: 0; }
+  .profile-item.active:hover .delete-btn { opacity: 1; }
+  .add-profile-btn { margin: 8px; padding: 9px; background: transparent; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text-mut); cursor: pointer; font-family: var(--sans); font-size: 12px; text-align: center; transition: all .12s; }
+  .add-profile-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .sidebar-footer { padding: 12px; border-top: 1px solid var(--border-soft); }
+  .status-badge { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 500; padding: 7px 10px; border-radius: 6px; background: var(--surface2); }
+  .status-badge.running { background: rgba(78,201,127,.10); color: var(--green); }
+  .status-badge.stopped { background: rgba(240,100,122,.08); color: var(--text-mut); }
+  .status-badge.external { background: rgba(240,163,94,.10); color: var(--orange); }
+  .status-badge.external .status-dot { background: var(--orange); box-shadow: 0 0 6px rgba(240,163,94,.6); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .status-badge.running .status-dot { background: var(--green); box-shadow: 0 0 6px rgba(78,201,127,.6); }
+  .status-badge.stopped .status-dot { background: var(--red); }
+
+  /* ── Main Layout ── */
+  .main { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .top-bar { padding: 0 20px; height: 52px; border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; justify-content: space-between; background: var(--surface); flex-shrink: 0; }
+  .top-bar h1 { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: .2px; display: flex; align-items: center; gap: 8px; }
+  .top-bar h1 svg { width: 18px; height: 18px; color: var(--accent); }
+  .top-bar h1 .badge { font-size: 10px; font-weight: 600; color: var(--text-mut); background: var(--surface2); border: 1px solid var(--border-soft); padding: 2px 7px; border-radius: 20px; letter-spacing: .3px; }
+  .top-actions { display: flex; gap: 8px; }
+  .content { flex: 1; padding: 20px; display: flex; gap: 20px; overflow: hidden; min-height: 0; }
+
+  /* Left Panel (Form Options) */
+  .settings-panel { flex: 1; min-width: 0; overflow-y: auto; padding-right: 8px; height: 100%; }
+
+  /* Right Panel (Pinned Command Preview & Logs) */
+  .logs-panel { width: 420px; flex-shrink: 0; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  .logs-panel .section { flex: 0 0 auto; margin-bottom: 12px; }
+  .logs-panel .logs-header { flex: 0 0 auto; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .logs-panel .logs-header h3 { font-size: 12px; color: var(--text-dim); }
+  .logs-panel .logs-box { flex: 1; min-height: 0; overflow-y: auto; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 10px; font-family: var(--mono); font-size: 11px; line-height: 1.6; color: var(--text-dim); white-space: pre-wrap; word-break: break-all; }
+
+  /* ── Sections ── */
+  /* overflow must stay visible or [data-tip] tooltips get clipped at section edges;
+     the header's rounded top corners are done explicitly instead */
+  .section { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); margin-bottom: 12px; overflow: visible; }
+  .section-header { border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; padding: 11px 14px; background: var(--surface2); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim); border-bottom: 1px solid var(--border-soft); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+  .section-header::before { content: counter(sec); counter-increment: sec; font-family: var(--mono); font-size: 10px; color: var(--text-mut); margin-right: 8px; }
+  .content .settings-panel { counter-reset: sec; }
+  .chev { display: inline-block; transition: transform .15s; color: var(--text-mut); font-size: 11px; }
+  .section-body { padding: 14px; display: grid; gap: 8px 12px; grid-template-columns: repeat(3, 1fr); align-content: start; }
+  .section-body.collapsed { display: none; }
+  .field { display: flex; align-items: center; gap: 6px; }
+  .field label { width: 92px; font-size: 11.5px; color: var(--text-dim); flex-shrink: 0; text-align: right; cursor: help; font-weight: 500; }
+  .field input[type="text"], .field input[type="number"], .field select { flex: 1; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 6px; padding: 6px 9px; color: var(--text); font-family: var(--mono); font-size: 12px; outline: none; transition: border-color .12s, box-shadow .12s; cursor: pointer; }
+  .field input[type="text"] { cursor: text; }
+  .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+  .field select option { background: var(--surface); }
+  .field input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+  .field .check-label { width: auto; cursor: help; }
+  .field input[type="text"].wide, .field input[type="number"].wide { max-width: 300px; }
+
+  /* ── Buttons ── */
+  .btn { padding: 7px 14px; border: 1px solid transparent; border-radius: 6px; font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer; transition: all .12s; display: inline-flex; align-items: center; gap: 6px; letter-spacing: .2px; }
+  .btn svg { width: 13px; height: 13px; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-success { background: var(--green); color: #fff; }
+  .btn-success:hover { filter: brightness(1.1); }
+  .btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
+  .btn-danger:hover { background: var(--red); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 11.5px; }
+  .btn-ghost { background: transparent; color: var(--text-dim); border-color: var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-mut); }
+
+  /* ── Command preview ── */
+  .command-box { background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px; font-family: var(--mono); font-size: 11.5px; color: var(--cyan); white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow-y: auto; line-height: 1.6; }
+
+  /* ── Toast ── */
+  .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; border-radius: var(--radius); font-size: 12px; font-family: var(--sans); font-weight: 500; z-index: 999; animation: slideIn .2s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  .toast.success { background: var(--green); color: #fff; }
+  .toast.error { background: var(--red); color: #fff; }
+  .toast.warn { background: var(--orange); color: #fff; }
+  @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-mut); }
+
+  /* ── Model select (wide) ── */
+  .model-select-wrap { grid-column: 1 / -1; }
+  .model-select-wrap select { width: 100%; padding: 7px 9px; font-size: 12px; }
+
+  /* ── Profile name inline ── */
+  .profile-name-row { grid-column: 1 / -1; }
+  .profile-name-row input { width: 100%; padding: 7px 10px; font-size: 13px; font-weight: 500; }
+
+  .empty-state { text-align: center; padding: 20px; color: var(--text-mut); font-size: 12px; }
+
+  /* ── Collapsible subsections within sections ── */
+  .sub-header { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-mut); padding: 2px 0 4px; grid-column: 1 / -1; border-bottom: 1px solid var(--border-soft); margin-top: 6px; font-weight: 600; }
+  .sub-header:first-child { margin-top: 0; }
+
+  /* ── Tooltips: native title attrs are upgraded to data-tip by JS (instant, styled, flag name first line) ── */
+  [title], [data-tip] { position: relative; }
+  [data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; top: calc(100% + 7px); left: 0; z-index: 200;
+    width: max-content; max-width: 340px; min-width: 150px;
+    background: #0c0e11; color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 8px 11px; font-size: 11.5px; font-weight: 400;
+    font-family: var(--sans); line-height: 1.55;
+    white-space: pre-line; text-align: left; text-transform: none; letter-spacing: 0;
+    box-shadow: 0 6px 20px rgba(0,0,0,.5); pointer-events: none;
+    animation: tipIn .12s ease;
+  }
+  @keyframes tipIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; } }
+
+  /* ── Elevation & motion polish ── */
+  .section { box-shadow: 0 1px 3px rgba(0,0,0,.28); }
+  .top-bar { box-shadow: 0 2px 8px rgba(0,0,0,.30); z-index: 20; }
+  .launch-bar { box-shadow: 0 -2px 8px rgba(0,0,0,.30); z-index: 20; }
+  .section-header:hover { color: var(--text); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+  .status-badge.running .status-dot { animation: pulse 2.2s ease infinite; }
+
+  /* ── Profile filter (sidebar) ── */
+  .profile-search { padding: 8px 8px 0; }
+  .profile-search input { width: 100%; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 6px; padding: 6px 9px; color: var(--text); font-family: var(--sans); font-size: 12px; outline: none; }
+  .profile-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+
+  /* ── Pinned launch bar (bottom of main column — always visible, never scrolls away) ── */
+  .launch-bar { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: var(--surface); border-top: 1px solid var(--border-soft); flex-shrink: 0; }
+  .launch-bar .cmd-oneline { font-family: var(--mono); font-size: 11px; color: var(--text-mut); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dirty-pill { display: none; align-items: center; gap: 6px; font-size: 11.5px; color: var(--orange); background: rgba(240,163,94,.10); padding: 5px 10px; border-radius: 20px; flex-shrink: 0; }
+  .dirty-pill.on { display: inline-flex; }
+  .kbd-hint { font-size: 10.5px; color: var(--text-mut); margin-right: 4px; }
+  .kbd-hint kbd { font-family: var(--mono); font-size: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; margin: 0 2px; }
+
+  /* ── 16:9 wide mode: fields auto-fill, and with the log rail hidden sections flow 2-up ── */
+  .section-body { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+  body.no-logs .logs-panel { display: none; }
+  body.no-logs .settings-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 0 16px; align-content: start; }
+  body.no-logs .section.span-2 { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ── -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    Profiles
+  </div>
+  <div class="profile-search"><input type="text" id="profileSearch" placeholder="Filter profiles…" oninput="filterProfiles()" autocomplete="off" /></div>
+  <div class="profile-list" id="profileList">
+    <div class="empty-state">Loading...</div>
+  </div>
+  <button class="add-profile-btn" onclick="document.getElementById('profileName').focus(); document.getElementById('profileName').select();">+ New Profile</button>
+  <div class="sidebar-footer">
+    <div class="status-badge stopped" id="statusBadge">
+      <span class="status-dot"></span>
+      <span id="statusText">Stopped</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── MAIN ── -->
+<div class="main">
+  <div class="top-bar">
+    <h1>Llama Loader</h1>
+    <div class="top-actions">
+      <span class="kbd-hint"><kbd>Ctrl+↵</kbd>launch<kbd>Ctrl+S</kbd>save<kbd>Ctrl+L</kbd>logs</span>
+      <button class="btn btn-ghost btn-sm" id="logsToggle" onclick="toggleLogs()" data-tip="Toggle the log rail. With the rail hidden the form flows in two columns — better use of a 16:9 screen.">Hide logs</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Left Settings Panel -->
+    <div class="settings-panel">
+
+      <!-- Profile name -->
+      <div class="section span-2">
+        <div class="section-header">Profile</div>
+        <div class="section-body">
+          <div class="profile-name-row">
+            <input type="text" id="profileName" placeholder="Profile name (e.g. Qwen3.6-27B)" title="Unique name for this configuration profile" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Import CLI command -->
+      <div class="section span-2">
+        <div class="section-header" onclick="toggleSection(this)">Import CLI Command <span>▾</span></div>
+        <div class="section-body">
+          <div style="grid-column:1/-1;">
+            <textarea id="cliPaste" placeholder="Paste your llama-server command here (e.g. ./build/bin/llama-server -m /path/to/model.gguf --ctx-size 32768 ...)" style="width:100%;height:80px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:inherit;font-size:12px;resize:vertical;outline:none;" onchange="parseCliCommand()"></textarea>
+          </div>
+          <div style="grid-column:1/-1;display:flex;gap:8px;">
+            <button class="btn btn-primary btn-sm" onclick="parseCliCommand()">Parse &amp; Apply</button>
+            <button class="btn btn-sm" style="background:var(--surface2);color:var(--text);" onclick="document.getElementById('cliPaste').value=''">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Model <span>▾</span></div>
+        <div class="section-body">
+          <div class="model-select-wrap field">
+            <label>llama-server</label>
+            <select id="llama_server" onchange="updateCommand()" title="Path to the llama-server binary (scanned from ~/ and /mnt/games)"></select>
+            <span id="binaryStatus" style="font-size:10px;color:var(--border);margin-top:2px;display:block;">Scanning builds...</span>
+            <input type="text" id="llama_server_custom" placeholder="Or type custom path..." style="margin-top:4px;width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:inherit;font-size:12px;outline:none;" onchange="(function(el){var s=document.getElementById('llama_server'); if(el.value && !Array.from(s.options).some(function(o){return o.value===el.value;})){var o=document.createElement('option'); o.value=el.value; o.textContent=el.value.split('/').pop()+' (custom)'; s.appendChild(o);} s.value=el.value; updateCommand();})(this)" title="Custom path to llama-server binary (added to the dropdown)"/>
+          </div>
+          <div class="model-select-wrap field">
+            <label>GGUF File</label>
+            <select id="model" onchange="updateCommand()" title="Path to the GGUF model file — scanned from ~/.lmstudio/models"></select>
+            <span id="modelStatus" style="font-size:10px;color:var(--border);margin-top:4px;display:block;">Loading...</span>
+          </div>
+          <div class="field">
+            <label title="Hugging Face repo: &lt;user&gt;/&lt;model&gt;[:quant]">HF Repo</label>
+            <input type="text" id="hf_repo" title='Hugging Face model repository, e.g. ggml-org/GLM-4.7-Flash-GGUF:Q4_K_M' onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Specific HF file to use">HF File</label>
+            <input type="text" id="hf_file" title='Override quant in --hf-repo with a specific file name' onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Direct download URL for the model">Model URL</label>
+            <input type="text" id="model_url" title='Direct URL to download the model file from' onchange="updateCommand()"/>
+          </div>
+          <div class="sub-header">Process launch (not llama.cpp flags)</div>
+          <div class="field" style="grid-column:1/-1;">
+            <label title="Environment variables set on the llama-server process. Filled automatically when you import a command that had them.">Env</label>
+            <input type="text" id="env" placeholder="LLAMA_ATTN_ROT_DISABLE=1 GGML_CUDA_NO_PINNED=1" title="Environment variables for the server process (space-separated KEY=VALUE). Applied to the child process, not to a shell." onchange="updateCommand()"/>
+          </div>
+          <div class="field" style="grid-column:1/-1;">
+            <label title="Command prefix run before llama-server, e.g. taskset -c 0-11 or nice -n 5">Wrapper</label>
+            <input type="text" id="exec_prefix" placeholder="taskset -c 0-11" title="Prefix command run before the binary (taskset/nice/&hellip;). Kept verbatim so imported affinity/niceness survives. Imported commands that already use it are reproduced exactly." onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Network <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Network interface to bind to">Host</label>
+            <input type="text" id="host" value="127.0.0.1" title="Network interface to listen on (0.0.0.0 for all)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Port number for the server">Port</label>
+            <input type="number" id="port" value="8080" title="Port number the server listens on" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Number of pipeline stages">Pipelines</label>
+            <input type="number" id="pipeline" value="1" min="1" title="Number of pipeline stages (default: 1)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Number of parallel sequences">Parallel</label>
+            <input type="number" id="parallel" value="1" min="1" title="Number of parallel sequences to decode (default: 1)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Model name alias">Alias</label>
+            <input type="text" id="alias" title="Model name alias (used by API, e.g. qwen36)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="KV unified">KV Unified</label>
+            <input type="checkbox" id="kv_unified" title="Use unified KV cache layout (--kv-unified)" onchange="updateCommand()"/>
+            <span class="check-label" title="Unified KV cache">KV unified</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CPU -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">CPU <span>▾</span></div>
+        <div class="section-body">
+          <div class="sub-header">Threads & Priority</div>
+          <div class="field">
+            <label title="Number of CPU threads for generation">Threads</label>
+            <input type="number" id="threads" value="6" min="1" title="CPU threads for generation (-1 = auto)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Threads for batch/prompt processing">Batch Threads</label>
+            <input type="number" id="threads_batch" value="0" min="0" title="Threads for batch & prompt processing (0 = same as threads)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Thread priority">Priority</label>
+            <select id="prio" onchange="updateCommand()" title="Process/thread priority: 0=normal, 1=medium, 2=high, 3=realtime">
+              <option value="0" selected>0 - Normal</option>
+              <option value="-1">-1 - Low</option>
+              <option value="1">1 - Medium</option>
+              <option value="2">2 - High</option>
+              <option value="3">3 - Realtime</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Batch thread priority">Batch Priority</label>
+            <select id="prio_batch" onchange="updateCommand()" title="Priority for batch processing threads">
+              <option value="0" selected>0 - Normal</option>
+              <option value="-1">-1 - Low</option>
+              <option value="1">1 - Medium</option>
+              <option value="2">2 - High</option>
+              <option value="3">3 - Realtime</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Polling level">Polling</label>
+            <input type="number" id="poll" value="50" min="0" max="100" title="Polling level to wait for work (0=no polling, default: 50)" onchange="updateCommand()"/>
+          </div>
+          <div class="sub-header">CPU Affinity</div>
+          <div class="field">
+            <label title="CPU affinity mask (hex)">CPU Mask</label>
+            <input type="text" id="cpu_mask" placeholder="e.g. ff" title="CPU affinity mask: arbitrarily long hex value" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="CPU range for affinity">CPU Range</label>
+            <input type="text" id="cpu_range" placeholder="e.g. 0-7" title="Range of CPUs for affinity, e.g. 0-7" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Strict CPU placement">CPU Strict</label>
+            <input type="checkbox" id="cpu_strict" title="Use strict CPU placement" onchange="updateCommand()"/>
+            <span class="check-label" title="Enforce strict CPU thread placement">Strict placement</span>
+          </div>
+          <div class="field">
+            <label title="Batch CPU affinity mask">Batch CPU Mask</label>
+            <input type="text" id="cpu_mask_batch" title="CPU affinity mask for batch processing" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Batch CPU range">Batch CPU Range</label>
+            <input type="text" id="cpu_range_batch" placeholder="e.g. 0-7" title="CPU range for batch affinity" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Strict batch CPU placement">Batch CPU Strict</label>
+            <input type="checkbox" id="cpu_strict_batch" title="Use strict CPU placement for batch threads" onchange="updateCommand()"/>
+            <span class="check-label" title="Strict CPU placement for batch">Strict batch</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- GPU -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">GPU & Offloading <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Max layers to store in VRAM">GPU Layers</label>
+            <input type="number" id="ngl" value="-1" title="-1 = auto (llama.cpp default — the flag is omitted). 0 = CPU only, N = exactly N layers offloaded, all = every layer." onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Comma-separated device list">Device</label>
+            <input type="text" id="device" placeholder="e.g. 0,1" title="Comma-separated list of devices for offloading" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="How to split across GPUs">Split Mode</label>
+            <select id="split_mode" onchange="updateCommand()" title="Split model across GPUs: layer=pipelined, row=parallel, tensor=experimental">
+              <option value="none">none - one GPU only</option>
+              <option value="layer" selected>layer - split layers (default)</option>
+              <option value="row">row - split by rows</option>
+              <option value="tensor">tensor - split weights (exp.)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Proportions for tensor split">Tensor Split</label>
+            <input type="text" id="tensor_split" placeholder="e.g. 3,1" title="Proportions to offload to each GPU, e.g. 3,1" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Main GPU index">Main GPU</label>
+            <input type="number" id="main_gpu" value="0" min="0" title="GPU index for model/KV (with split-mode=none)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Fit args to device memory">Fit</label>
+            <input type="checkbox" id="fit" checked title="Auto-adjust args to fit device memory (default: on)" onchange="updateCommand()"/>
+            <span class="check-label" title="Fit arguments to available VRAM">Auto-fit to VRAM</span>
+          </div>
+          <div class="field">
+            <label title="Fit target margin (MiB)">Fit Target</label>
+            <input type="text" id="fit_target" value="1024" title="Target margin per device in MiB for --fit (default: 1024)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Minimum ctx size for fit">Fit Ctx</label>
+            <input type="number" id="fit_ctx" value="4096" min="1" title="Minimum ctx size that can be set by --fit (default: 4096)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Offload tensor ops to device">Op Offload</label>
+            <input type="checkbox" id="op_offload" checked title="Offload host tensor operations to device" onchange="updateCommand()"/>
+            <span class="check-label" title="Move tensor operations to GPU">Offload ops to device</span>
+          </div>
+          <div class="field">
+            <label title="Keep MoE weights on CPU">CPU MoE</label>
+            <input type="checkbox" id="cmoe" title="Keep all Mixture of Experts weights in CPU" onchange="updateCommand()"/>
+            <span class="check-label" title="Keep MoE weights on CPU">MoE on CPU</span>
+          </div>
+          <div class="field">
+            <label title="Keep first N MoE layers on CPU">N CPU MoE</label>
+            <input type="number" id="n_cmoe" value="0" min="0" title="Keep first N MoE layers on CPU" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Batch & Context -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Batch & Context <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Logical batch size">Batch Size</label>
+            <input type="number" id="batch" value="2048" min="1" title="Logical maximum batch size (default: 2048)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Physical batch size">Ubatch Size</label>
+            <input type="number" id="ubatch" value="128" min="1" title="Physical maximum batch size (default: 512)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Context window size">Context Size</label>
+            <input type="number" id="ctx_size" value="100400" min="1" title="Size of the prompt context (0 = from model)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Tokens to predict">N Predict</label>
+            <input type="number" id="n_predict" value="-1" min="-1" title="Number of tokens to predict (-1 = infinity)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Tokens to keep from prompt">Keep</label>
+            <input type="number" id="keep" value="0" min="0" title="Tokens to keep from initial prompt (-1 = all)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Context shift for infinite gen">Context Shift</label>
+            <input type="checkbox" id="context_shift" title="Enable context shift on infinite text generation" onchange="updateCommand()"/>
+            <span class="check-label" title="Shift context for continuous generation">Infinite gen context shift</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Model Loading <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Model loading mode">Load Mode</label>
+            <select id="load_mode" onchange="updateCommand()" title="mmap=memory-map, mlock=keep in RAM, dio=direct I/O, none=normal">
+              <option value="none">none - standard load</option>
+              <option value="mmap" selected>mmap - memory-map</option>
+              <option value="mlock">mlock - mmap + lock in RAM</option>
+              <option value="dio">dio - direct I/O</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Disable memory-mapped I/O">No MMAP</label>
+            <input type="checkbox" id="no_mmap" checked title="Disable memory-mapped I/O (slower load, less pageouts)" onchange="updateCommand()"/>
+            <span class="check-label" title="Disables mmap for model loading">Disable mmap</span>
+          </div>
+          <div class="field">
+            <label title="Lock model in RAM">Mlock</label>
+            <input type="checkbox" id="mlock" title="Force system to keep model in RAM (no swap)" onchange="updateCommand()"/>
+            <span class="check-label" title="Lock model in RAM to prevent swapping">Lock in RAM</span>
+          </div>
+          <div class="field">
+            <label title="Use DirectIO">Direct IO</label>
+            <input type="checkbox" id="direct_io" title="Use DirectIO if available" onchange="updateCommand()"/>
+            <span class="check-label" title="Direct I/O for model loading">Enable DirectIO</span>
+          </div>
+          <div class="field">
+            <label title="NUMA optimization">NUMA</label>
+            <select id="numa" onchange="updateCommand()" title="NUMA optimizations: distribute, isolate, or numactl">
+              <option value="none" selected>none</option>
+              <option value="distribute">distribute - spread over nodes</option>
+              <option value="isolate">isolate - single node</option>
+              <option value="numactl">numactl - use numactl map</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Disable weight repacking">No Repack</label>
+            <input type="checkbox" id="no_repack" title="Disable weight repacking on load" onchange="updateCommand()"/>
+            <span class="check-label" title="Skip weight repacking during load">Disable repack</span>
+          </div>
+          <div class="field">
+            <label title="Bypass host buffer">No Host</label>
+            <input type="checkbox" id="no_host" title="Bypass host buffer, allow extra buffers" onchange="updateCommand()"/>
+            <span class="check-label" title="Use extra buffers instead of host">Bypass host buffer</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flash Attention -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Flash Attention <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Flash Attention mode">Flash Attn</label>
+            <select id="flash_attn" onchange="updateCommand()" title="Flash Attention: on, off, or auto (default: auto)">
+              <option value="auto" selected>auto</option>
+              <option value="on">on - always enabled</option>
+              <option value="off">off - disabled</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- KV Cache -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">KV Cache <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="KV cache data type for K">Cache Type K</label>
+            <select id="cache_k" onchange="updateCommand()" title="KV cache quantization for K (f16 = default, q4_0 saves RAM)">
+              <option value="f16">f16 - default</option>
+              <option value="f32">f32 - full precision</option>
+              <option value="bf16">bf16 - bfloat16</option>
+              <option value="q8_0">q8_0 - 8-bit</option>
+              <option value="q4_0" selected>q4_0 - 4-bit</option>
+              <option value="q4_1">q4_1 - 4-bit + scale</option>
+              <option value="iq4_nl">iq4_0 - nonlinear 4-bit</option>
+              <option value="q5_0">q5_0 - 5-bit</option>
+              <option value="q5_1">q5_1 - 5-bit + scale</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="KV cache data type for V">Cache Type V</label>
+            <select id="cache_v" onchange="updateCommand()" title="KV cache quantization for V (f16 = default, q4_0 saves RAM)">
+              <option value="f16">f16 - default</option>
+              <option value="f32">f32 - full precision</option>
+              <option value="bf16">bf16 - bfloat16</option>
+              <option value="q8_0">q8_0 - 8-bit</option>
+              <option value="q4_0" selected>q4_0 - 4-bit</option>
+              <option value="q4_1">q4_1 - 4-bit + scale</option>
+              <option value="iq4_nl">iq4_0 - nonlinear 4-bit</option>
+              <option value="q5_0">q5_0 - 5-bit</option>
+              <option value="q5_1">q5_1 - 5-bit + scale</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="KV cache offloading">KV Offload</label>
+            <input type="checkbox" id="kv_offload" checked title="Enable KV cache offloading to device" onchange="updateCommand()"/>
+            <span class="check-label" title="Offload KV cache to GPU">Offload KV to device</span>
+          </div>
+          <div class="field">
+            <label title="Full-size SWA cache">SWA Full</label>
+            <input type="checkbox" id="swa_full" title="Use full-size SWA cache" onchange="updateCommand()"/>
+            <span class="check-label" title="Enable sliding window attention full cache">Full SWA cache</span>
+          </div>
+          <div class="field">
+            <label title="Max cache size in MiB">Cache RAM</label>
+            <input type="number" id="cache_ram" value="8192" min="0" title="Maximum cache size in MiB (-1 = no limit, 0 = disable)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Context checkpoints per slot">Ctx Checkpoints</label>
+            <input type="number" id="ctx_checkpoints" value="32" min="0" title="Max context checkpoints per slot (default: 32)" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- RoPE Scaling -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">RoPE Scaling <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="RoPE scaling method">RoPE Method</label>
+            <select id="rope_scaling" onchange="updateCommand()" title="RoPE frequency scaling method">
+              <option value="none">none</option>
+              <option value="linear" selected>linear - default</option>
+              <option value="yarn">yarn - YaRN scaling</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="RoPE context scaling factor">RoPE Scale</label>
+            <input type="number" id="rope_scale" value="1.0" step="0.1" min="0.1" title="Context scaling factor, expands context by N" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="RoPE base frequency">RoPE Freq Base</label>
+            <input type="text" id="rope_freq_base" title="RoPE base frequency (default: from model)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="RoPE frequency scaling factor">RoPE Freq Scale</label>
+            <input type="number" id="rope_freq_scale" value="1.0" step="0.1" min="0.1" title="Freq scaling factor, expands context by 1/N" onchange="updateCommand()"/>
+          </div>
+          <div class="sub-header">YaRN Parameters</div>
+          <div class="field">
+            <label title="Original context size for YaRN">YaRN Orig Ctx</label>
+            <input type="text" id="yarn_orig_ctx" title="Original context size of model (0 = training ctx)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="YaRN extrapolation mix factor">YaRN Ext Factor</label>
+            <input type="number" id="yarn_ext_factor" value="-1.0" step="0.1" title="Extrapolation mix factor (0.0 = full interpolation)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="YaRN attention magnitude">YaRN Attn Factor</label>
+            <input type="number" id="yarn_attn_factor" value="-1.0" step="0.1" title="Attention magnitude factor, sqrt(t)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="YaRN high correction dim">YaRN Beta Slow</label>
+            <input type="number" id="yarn_beta_slow" value="-1.0" step="0.1" title="High correction dim or alpha" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="YaRN low correction dim">YaRN Beta Fast</label>
+            <input type="number" id="yarn_beta_fast" value="-1.0" step="0.1" title="Low correction dim or beta" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- LoRA & Control Vectors -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">LoRA &amp; Control Vectors <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Path to LoRA adapter">LoRA Path</label>
+            <input type="text" id="lora" title="Path to LoRA adapter file (comma-separated for multiple)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="LoRA with scaling">LoRA Scaled</label>
+            <input type="text" id="lora_scaled" placeholder="path.gguf:1.0" title="LoRA adapter with custom scale: FNAME:SCALE" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Control vector path">Control Vector</label>
+            <input type="text" id="control_vector" title="Path to control vector file (comma-separated)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Control vector with scaling">CV Scaled</label>
+            <input type="text" id="control_vector_scaled" placeholder="path.bin:1.0" title="Control vector with custom scale: FNAME:SCALE" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Speculative Decoding -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Speculative Decoding <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Enable speculative decoding">Enable</label>
+            <input type="checkbox" id="speculative" checked onchange="toggleSpec(); updateCommand()" title="Enable speculative decoding for faster generation"/>
+            <span class="check-label" title="Use draft model or MTP for speculative decoding">Speculative decoding</span>
+          </div>
+          <div class="field">
+            <label title="Draft model path">Draft Model</label>
+            <input type="text" id="spec_draft_model" title="Path to draft model for speculative decoding" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Speculative decoding type">Spec Type</label>
+            <select id="spec_type" onchange="updateCommand()" title="Type of speculative decoding: draft-mtp, draft-simple, ngram, etc.">
+              <option value="none">none</option>
+              <option value="draft-mtp" selected>draft-mtp</option>
+              <option value="draft-simple">draft-simple</option>
+              <option value="draft-eagle3">draft-eagle3</option>
+              <option value="draft-mtp,draft-simple">draft-mtp,draft-simple</option>
+              <option value="ngram-simple">ngram-simple</option>
+              <option value="ngram-map-k">ngram-map-k</option>
+              <option value="ngram-mod">ngram-mod</option>
+            </select>
+          </div>
+          <div class="field" id="spec_n_max_field">
+            <label title="Max draft tokens">Spec N Max</label>
+            <input type="number" id="spec_n_max" value="3" min="1" title="Number of tokens to draft (default: 3)" onchange="updateCommand()"/>
+          </div>
+          <div class="field" id="spec_n_min_field">
+            <label title="Min draft tokens">Spec N Min</label>
+            <input type="number" id="spec_n_min" value="0" min="0" title="Minimum draft tokens (default: 0)" onchange="updateCommand()"/>
+          </div>
+          <div class="field" id="spec_p_split_field">
+            <label title="Split probability">P Split</label>
+            <input type="number" id="spec_p_split" value="0.10" step="0.05" min="0" max="1" title="Speculative decoding split probability (default: 0.10)" onchange="updateCommand()"/>
+          </div>
+          <div class="field" id="spec_p_min_field">
+            <label title="Min probability for greedy">P Min</label>
+            <input type="number" id="spec_p_min" value="0" step="0.05" min="0" max="1" title="Min speculative probability for greedy accept (llama.cpp default: 0.00)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Draft model threads">Draft Threads</label>
+            <input type="text" id="spec_draft_threads" title="CPU threads for draft model" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Draft model GPU layers">Draft GPU Layers</label>
+            <input type="text" id="spec_draft_ngl" title="GPU layers for draft model (auto/all/number)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Draft model device">Draft Device</label>
+            <input type="text" id="spec_draft_device" title="Device for draft model offloading" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Draft cache type K">Draft Cache K</label>
+            <select id="spec_draft_cache_k" onchange="updateCommand()" title="KV cache type for draft model K">
+              <option value="f16" selected>f16</option>
+              <option value="f32">f32</option>
+              <option value="q8_0">q8_0</option>
+              <option value="q4_0">q4_0</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Draft cache type V">Draft Cache V</label>
+            <select id="spec_draft_cache_v" onchange="updateCommand()" title="KV cache type for draft model V">
+              <option value="f16" selected>f16</option>
+              <option value="f32">f32</option>
+              <option value="q8_0">q8_0</option>
+              <option value="q4_0">q4_0</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Draft MoE on CPU">Draft CPU MoE</label>
+            <input type="checkbox" id="spec_draft_cpu_moe" title="Keep all MoE weights in CPU for draft model" onchange="updateCommand()"/>
+            <span class="check-label" title="Keep MoE on CPU for draft">Draft MoE on CPU</span>
+          </div>
+          <div class="field">
+            <label title="Backend sampling for draft">Draft Backend</label>
+            <input type="checkbox" id="spec_draft_backend_sampling" checked title="Offload draft sampling to backend" onchange="updateCommand()"/>
+            <span class="check-label" title="Offload draft sampling to backend">Backend sampling</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sampling -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Sampling <span>▾</span></div>
+        <div class="section-body">
+          <div class="sub-header">Core</div>
+          <div class="field">
+            <label title="Temperature">Temperature</label>
+            <input type="number" id="temp" value="0.8" step="0.05" min="0" title="Temperature for sampling (0 = deterministic, default: 0.80)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Top-p sampling">Top P</label>
+            <input type="number" id="top_p" value="0.95" step="0.01" min="0" max="1" title="Nucleus sampling threshold (1.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Top-k sampling">Top K</label>
+            <input type="number" id="top_k" value="20" min="0" title="Consider top K tokens (0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Min-p sampling">Min P</label>
+            <input type="number" id="min_p" value="0.0" step="0.01" min="0" max="1" title="Min-p sampling threshold (0.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Top-n-sigma sampling">Top N Sigma</label>
+            <input type="number" id="top_n_sigma" value="-1.0" step="0.1" title="Top-n-sigma sampling (-1.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Locally typical sampling">Typical P</label>
+            <input type="number" id="typical_p" value="1.0" step="0.05" min="0" max="1" title="Locally typical sampling (1.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="sub-header">XTemperature (XTC)</div>
+          <div class="field">
+            <label title="XTC probability">XTC Probability</label>
+            <input type="number" id="xtc_probability" value="0.0" step="0.05" min="0" max="1" title="XTC probability (0.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="XTC threshold">XTC Threshold</label>
+            <input type="number" id="xtc_threshold" value="0.10" step="0.05" min="0" max="1" title="XTC threshold (1.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="sub-header">Seed</div>
+          <div class="field">
+            <label title="RNG seed">Seed</label>
+            <input type="number" id="seed" value="-1" min="-1" title="RNG seed (-1 = random)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Custom sampler sequence">Samplers</label>
+            <input type="text" id="samplers" title="Semicolon-separated sampler order, e.g. penalties;temperature;top_k" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Ignore EOS token">Ignore EOS</label>
+            <input type="checkbox" id="ignore_eos" title="Ignore end-of-stream token and keep generating" onchange="updateCommand()"/>
+            <span class="check-label" title="Continue past EOS token">Ignore EOS</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Repetition Penalties -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Repetition Penalties <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Tokens to consider">Repeat Last N</label>
+            <input type="number" id="repeat_last_n" value="64" min="0" title="Last N tokens for penalty (0 = disabled, -1 = ctx_size)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Repeat penalty multiplier">Repeat Penalty</label>
+            <input type="number" id="repeat_penalty" value="1.0" step="0.05" min="0" title="Repeat penalty multiplier (1.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Presence penalty">Presence Penalty</label>
+            <input type="number" id="presence_penalty" value="0.0" step="0.1" title="Presence penalty (0.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Frequency penalty">Frequency Penalty</label>
+            <input type="number" id="frequency_penalty" value="0.0" step="0.1" title="Frequency penalty (0.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRY Sampling -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">DRY Sampling <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="DRY multiplier">DRY Multiplier</label>
+            <input type="number" id="dry_multiplier" value="0.0" step="0.1" min="0" title="DRY sampling multiplier (0.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="DRY base value">DRY Base</label>
+            <input type="number" id="dry_base" value="1.75" step="0.1" title="DRY base value (default: 1.75)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="DRY allowed length">Allowed Length</label>
+            <input type="number" id="dry_allowed_length" value="2" min="1" title="Allowed length for DRY (default: 2)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="DRY penalty last N">Penalty Last N</label>
+            <input type="number" id="dry_penalty_last_n" value="-1" min="-1" title="Last N tokens for DRY penalty (-1 = ctx size)" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Adaptive-p & Dynamic Temp -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Adaptive-p &amp; Dynamic Temp <span>▾</span></div>
+        <div class="section-body">
+          <div class="sub-header">Adaptive-p</div>
+          <div class="field">
+            <label title="Adaptive target probability">Adaptive Target</label>
+            <input type="number" id="adaptive_target" value="-1.0" step="0.05" min="-1" max="1" title="Target probability for adaptive-p (negative = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Adaptive decay rate">Adaptive Decay</label>
+            <input type="number" id="adaptive_decay" value="0.90" step="0.05" min="0" max="0.99" title="Decay rate for adaptation (0.90 = stable)" onchange="updateCommand()"/>
+          </div>
+          <div class="sub-header">Dynamic Temperature</div>
+          <div class="field">
+            <label title="Dynamic temp range">Dynatemp Range</label>
+            <input type="number" id="dynatemp_range" value="0.0" step="0.1" min="0" title="Dynamic temperature range (0.0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Dynamic temp exponent">Dynatemp Exp</label>
+            <input type="number" id="dynatemp_exp" value="1.0" step="0.1" min="0" title="Dynamic temperature exponent (default: 1.0)" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mirostat -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Mirostat <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Mirostat version">Mirostat</label>
+            <select id="mirostat" onchange="updateCommand()" title="0=disabled, 1=Mirostat, 2=Mirostat 2.0">
+              <option value="0" selected>0 - Disabled</option>
+              <option value="1">1 - Mirostat</option>
+              <option value="2">2 - Mirostat 2.0</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Mirostat learning rate">Mirostat LR</label>
+            <input type="number" id="mirostat_lr" value="0.10" step="0.05" min="0" title="Mirostat learning rate, eta (default: 0.10)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Mirostat target entropy">Mirostat Entropy</label>
+            <input type="number" id="mirostat_ent" value="5.0" step="0.5" min="0" title="Mirostat target entropy, tau (default: 5.0)" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grammar & JSON Schema -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Grammar &amp; JSON Schema <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="BNF grammar string">Grammar</label>
+            <input type="text" id="grammar" title="BNF-like grammar to constrain generations" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Grammar file path">Grammar File</label>
+            <input type="text" id="grammar_file" title="Path to file containing grammar" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="JSON schema for output">JSON Schema</label>
+            <input type="text" id="json_schema" placeholder='{}' title="JSON schema to constrain output (e.g. {} for any JSON)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="JSON schema file">Schema File</label>
+            <input type="text" id="json_schema_file" title="Path to file containing JSON schema" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Logit bias string">Logit Bias</label>
+            <input type="text" id="logit_bias" placeholder="15043+1" title="Token ID bias, e.g. 15043+1 or 15043-1" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat & Conversation -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Chat &amp; Conversation <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="System prompt">System Prompt</label>
+            <input type="text" id="system_prompt" title="System message for the model" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Conversation mode">Conversation</label>
+            <input type="checkbox" id="conversation" checked title="Run in conversation mode (no special tokens)" onchange="updateCommand()"/>
+            <span class="check-label" title="Enable conversation mode">Conversation mode</span>
+          </div>
+          <div class="field">
+            <label title="Single turn only">Single Turn</label>
+            <input type="checkbox" id="single_turn" title="Run for one turn then exit" onchange="updateCommand()"/>
+            <span class="check-label" title="Exit after one response">Single turn</span>
+          </div>
+          <div class="field">
+            <label title="Multiline input">Multiline Input</label>
+            <input type="checkbox" id="multiline_input" title="Allow multiline input without backslash" onchange="updateCommand()"/>
+            <span class="check-label" title="Write multiple lines without escaping">Multiline input</span>
+          </div>
+          <div class="field">
+            <label title="Reverse prompt">Reverse Prompt</label>
+            <input type="text" id="reverse_prompt" title="Halt generation at this prompt, return control" onchange="updateCommand()"/>
+          </div>
+          <div class="sub-header">Reasoning / Thinking</div>
+          <div class="field">
+            <label title="Reasoning mode">Reasoning</label>
+            <select id="reasoning" onchange="updateCommand()" title="on=always, off=never, auto=detect from template">
+              <option value="auto" selected>auto - detect</option>
+              <option value="on">on - always</option>
+              <option value="off">off - never</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Reasoning parser/format (fork-dependent, e.g. deepseek-legacy, deepseek, glm45, phi4, mistral-eager)">Reason Format</label>
+            <input type="text" id="reasoning_format" placeholder="deepseek-legacy" title="--reasoning-format: which parser extracts the reasoning trace. Names differ per fork — leave empty for server default." onchange="updateCommand()"/>
+          </div>
+          <div class="field" style="grid-column:1/-1;">
+            <label title="Raw JSON passed to --chat-template-kwargs. Any key round-trips (reasoning_effort, preserve_thinking, ...)">Template Kw</label>
+            <input type="text" id="chat_template_kwargs" placeholder='{"reasoning_effort":"medium","preserve_thinking":false}' title='--chat-template-kwargs as raw JSON, e.g. {"reasoning_effort":"medium"}. The Preserve-thinking checkbox merges into this.' onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Reasoning token budget">Reason Budget</label>
+            <input type="number" id="reasoning_budget" value="-1" min="-1" title="Token budget for thinking (-1 = unrestricted, 0 = disabled)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Budget exhaustion message">Budget Message</label>
+            <input type="text" id="reasoning_budget_message" title="Message when reasoning budget exhausted" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Preserve reasoning trace">Preserve Reasoning</label>
+            <select id="reasoning_preserve" onchange="updateCommand()" title="auto=template default, on=always preserve, off=never preserve">
+              <option value="auto" selected>auto - template default</option>
+              <option value="on">on - always preserve</option>
+              <option value="off">off - never preserve</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Preserve thinking tags">Preserve Thinking</label>
+            <input type="checkbox" id="preserve_thinking" title="Keep &lt;thinking&gt; tags via chat-template-kwargs" onchange="updateCommand()"/>
+            <span class="check-label" title="Pass preserve_thinking to template">Preserve &lt;thinking&gt; tags</span>
+          </div>
+          <div class="sub-header">Chat Template</div>
+          <div class="field">
+            <label title="Chat template name">Chat Template</label>
+            <select id="chat_template" onchange="updateCommand()" title="Built-in chat template (auto = from model metadata)">
+              <option value="auto" selected>auto - from model</option>
+              <option value="chatml">chatml</option>
+              <option value="llama3">llama3</option>
+              <option value="llama4">llama4</option>
+              <option value="mistral-v3">mistral-v3</option>
+              <option value="mistral-v7">mistral-v7</option>
+              <option value="gemma">gemma</option>
+              <option value="phi3">phi3</option>
+              <option value="phi4">phi4</option>
+              <option value="deepseek">deepseek</option>
+              <option value="deepseek3">deepseek3</option>
+              <option value="command-r">command-r</option>
+              <option value="vicuna">vicuna</option>
+              <option value="zephyr">zephyr</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Chat template file">Template File</label>
+            <input type="text" id="chat_template_file" title="Path to custom Jinja chat template file" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Skip chat parsing">Skip Chat Parse</label>
+            <input type="checkbox" id="skip_chat_parsing" title="Force pure content parser (model outputs reasoning/tool calls as content)" onchange="updateCommand()"/>
+            <span class="check-label" title="Raw content output, no parsing">Skip parsing</span>
+          </div>
+          <div class="sub-header">Tools &amp; Jinja</div>
+          <div class="field">
+            <label title="Built-in tools">Tools</label>
+            <input type="text" id="tools" placeholder="all" title="Built-in tools for AI agents, e.g. all (empty = none)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Jinja template engine">Jinja</label>
+            <input type="checkbox" id="jinja" checked title="Use the jinja template engine for chat (default: on)" onchange="updateCommand()"/>
+            <span class="check-label" title="Jinja chat template engine">Jinja engine</span>
+          </div>
+          <div class="field" style="grid-column:1/-1;">
+            <label title="Extra CLI arguments">Extra Args</label>
+            <input type="text" id="extra_args" placeholder="--kv-unified --slot-prompt-similarity 0.8" title="Extra llama-server flags appended verbatim (round-trips any flag not modeled above)" onchange="updateCommand()"/>
+          </div>
+          <div class="sub-header">Misc</div>
+          <div class="field">
+            <label title="Display prompt">Display Prompt</label>
+            <input type="checkbox" id="no_display_prompt" title="Print prompt at generation (default: true)" onchange="updateCommand()"/>
+            <span class="check-label" title="Hide prompt during generation">Hide prompt</span>
+          </div>
+          <div class="field">
+            <label title="Show special tokens">Special Tokens</label>
+            <input type="checkbox" id="special" title="Show special tokens in output" onchange="updateCommand()"/>
+            <span class="check-label" title="Display special tokens like BOS/EOS">Show special tokens</span>
+          </div>
+          <div class="field">
+            <label title="Warmup run">Warmup</label>
+            <input type="checkbox" id="no_warmup" title="Perform warmup with empty run (default: enabled)" onchange="updateCommand()"/>
+            <span class="check-label" title="Skip warmup run">Skip warmup</span>
+          </div>
+          <div class="field">
+            <label title="Backend sampling">Backend Sampling</label>
+            <input type="checkbox" id="backend_sampling" title="Enable backend sampling (experimental)" onchange="updateCommand()"/>
+            <span class="check-label" title="Offload sampling to backend">Backend sampling</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Multimodal -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Multimodal <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Path to mmproj file">MMProj</label>
+            <input type="text" id="mmproj" title="Path to multimodal projector file" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Auto-download mmproj">MMProj Auto</label>
+            <input type="checkbox" id="mmproj_auto" checked title="Auto-use multimodal projector if available" onchange="updateCommand()"/>
+            <span class="check-label" title="Use mmproj automatically with HF repos">Auto mmproj</span>
+          </div>
+          <div class="field">
+            <label title="GPU offload mmproj">MMProj Offload</label>
+            <input type="checkbox" id="mmproj_offload" checked title="GPU offload for multimodal projector" onchange="updateCommand()"/>
+            <span class="check-label" title="Offload mmproj to GPU">GPU offload</span>
+          </div>
+          <div class="field">
+            <label title="Image min tokens">Img Min Tokens</label>
+            <input type="text" id="image_min_tokens" title="Min tokens per image (dynamic res models)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Image max tokens">Img Max Tokens</label>
+            <input type="text" id="image_max_tokens" title="Max tokens per image (dynamic res models)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Media files">Media Files</label>
+            <input type="text" id="media_files" placeholder="img1.jpg,img2.png" title="Image/audio/video files (comma-separated)" onchange="updateCommand()"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Override & Debug -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Override &amp; Debug <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="Override tensor buffer type">Override Tensor</label>
+            <input type="text" id="override_tensor" title="Override tensor buffer type, e.g. tensor_name=buffer_type" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Override model metadata KV">Override KV</label>
+            <input type="text" id="override_kv" title='Override model KV, e.g. tokenizer.ggml.add_bos_token=bool:false' onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Check tensor data">Check Tensors</label>
+            <input type="checkbox" id="check_tensors" title="Check model tensor data for invalid values" onchange="updateCommand()"/>
+            <span class="check-label" title="Validate tensor data on load">Validate tensors</span>
+          </div>
+          <div class="sub-header">Logging</div>
+          <div class="field">
+            <label title="Log file path">Log File</label>
+            <input type="text" id="log_file" title="Log output to file" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Log colors">Log Colors</label>
+            <select id="log_colors" onchange="updateCommand()" title="Colored logging: on, off, or auto">
+              <option value="auto" selected>auto</option>
+              <option value="on">on</option>
+              <option value="off">off</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Verbosity level">Log Verbosity</label>
+            <select id="log_verbosity" onchange="updateCommand()" title="0=generic, 1=error, 2=warning, 3=info, 4=trace, 5=debug">
+              <option value="0">0 - generic</option>
+              <option value="1" selected>1 - error</option>
+              <option value="2">2 - warning</option>
+              <option value="3">3 - info</option>
+              <option value="4">4 - trace</option>
+              <option value="5">5 - debug</option>
+            </select>
+          </div>
+          <div class="field">
+            <label title="Verbose logging">Log Verbose</label>
+            <input type="checkbox" id="log_verbose" title="Log all messages (verbosity = infinity)" onchange="updateCommand()"/>
+            <span class="check-label" title="Maximum verbosity for debugging">Max verbosity</span>
+          </div>
+          <div class="field">
+            <label title="Disable logging">Log Disable</label>
+            <input type="checkbox" id="log_disable" title="Disable all logging" onchange="updateCommand()"/>
+            <span class="check-label" title="Turn off all log output">Disable logging</span>
+          </div>
+          <div class="field">
+            <label title="Log timestamps">Log Timestamps</label>
+            <input type="checkbox" id="log_timestamps" title="Enable timestamps in log messages" onchange="updateCommand()"/>
+            <span class="check-label" title="Add timestamps to logs">Timestamps</span>
+          </div>
+          <div class="sub-header">Misc</div>
+          <div class="field">
+            <label title="Offline mode">Offline</label>
+            <input type="checkbox" id="offline" title="Force use of cache, prevent network access" onchange="updateCommand()"/>
+            <span class="check-label" title="No network, use cache only">Offline mode</span>
+          </div>
+          <div class="field">
+            <label title="Disable perf timings">No Perf</label>
+            <input type="checkbox" id="no_perf" title="Disable internal performance timings" onchange="updateCommand()"/>
+            <span class="check-label" title="Turn off libllama perf counters">No perf timings</span>
+          </div>
+          <div class="field">
+            <label title="Show timings">Show Timings</label>
+            <input type="checkbox" id="show_timings" checked title="Show timing info after each response" onchange="updateCommand()"/>
+            <span class="check-label" title="Display timing after responses">Show timings</span>
+          </div>
+        </div>
+      </div>
+
+    </div> <!-- End of settings-panel -->
+
+    <!-- Right Panel: Command Preview + Logs -->
+    <div class="logs-panel" id="logsPanel">
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Command Preview <span>▾</span></div>
+        <div class="section-body" style="grid-template-columns:1fr;">
+          <div class="command-box" id="commandBox">Loading...</div>
+        </div>
+      </div>
+      <div class="logs-header">
+        <h3>📋 Server Log</h3>
+        <button class="btn btn-sm btn-primary" onclick="fetchLogs()">↻ Refresh</button>
+      </div>
+      <div class="logs-box" id="logsBox">Server not running.</div>
+    </div>
+
+  </div> <!-- End of content -->
+
+  <!-- ── PINNED LAUNCH BAR ── -->
+  <div class="launch-bar">
+    <span class="dirty-pill" id="dirtyPill">● unsaved changes</span>
+    <span class="cmd-oneline" id="cmdOneline" title="Full command in the Command Preview panel">&nbsp;</span>
+    <button class="btn btn-ghost" onclick="saveProfile()" data-tip="Save current settings as a named profile (Ctrl+S)">Save</button>
+    <button class="btn btn-success" id="launchBtn" onclick="launchServer()" data-tip="Start llama-server with current config (Ctrl+Enter)">Launch</button>
+    <button class="btn btn-danger" id="stopBtn" onclick="stopServer()" style="display:none" data-tip="Terminate the running server">Stop</button>
+  </div>
+</div> <!-- End of main -->
+
+<script>
+let profiles = {};
+
+// ── Init ──
+async function init() {
+  try {
+    const r = await fetch('/api/models');
+    const models = await r.json();
+    const sel = document.getElementById('model');
+    if (!sel) throw new Error('model select element not found');
+    sel.innerHTML = '';
+    const count = Array.isArray(models) ? models.length : 0;
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.path;
+      opt.textContent = m.rel + ' (' + m.size_gb + ' GB)';
+      sel.appendChild(opt);
+    });
+    if (!count) {
+      const opt = document.createElement('option');
+      opt.textContent = 'No models found';
+      sel.appendChild(opt);
+    }
+    const statusEl = document.getElementById('modelStatus');
+    if (statusEl) statusEl.textContent = count + ' models found';
+    console.log('init: loaded ' + count + ' models');
+  } catch(e) {
+    console.error('Failed to load models', e);
+    const statusEl = document.getElementById('modelStatus');
+    if (statusEl) statusEl.textContent = 'ERROR: ' + e.message;
+  }
+  try { const i = await (await fetch('/api/info')).json(); if (i.home) window.__HOME = i.home; } catch (e) {}
+  try { await loadBinaries(); } catch(e) { console.error('loadBinaries failed', e); }
+  try { await refreshProfiles(); console.log('init: profiles loaded'); } catch(e) { console.error('refreshProfiles failed', e); }
+  try { updateCommand(); console.log('init: command updated'); } catch(e) { console.error('updateCommand failed', e); }
+  try { updateStatus(); console.log('init: status updated'); } catch(e) { console.error('updateStatus failed', e); }
+  enhanceTooltips();
+  collapseAdvanced();
+  // Desktop 16:9: start with the log rail hidden on large screens so the form
+  // flows 2-up and most profiles fit without scrolling. One click brings logs back.
+  if (window.innerWidth >= 1500) setLogsVisible(false);
+  setInterval(updateStatus, 5000);
+  setInterval(fetchLogs, 3000);
+}
+init();
+
+// ── llama-server builds (server-scanned, never a hardcoded list) ──
+async function loadBinaries() {
+  const sel = document.getElementById('llama_server');
+  const statusEl = document.getElementById('binaryStatus');
+  let bins = [];
+  try {
+    const r = await fetch('/api/binaries');
+    if (r.ok) bins = await r.json();
+  } catch (e) { /* leave list empty -> custom path still works */ }
+  const prev = sel.value;
+  sel.innerHTML = '';
+  const groups = [['dev', 'My llama.cpp builds'], ['lmstudio', 'LM Studio runtimes']];
+  groups.forEach(([kind, title]) => {
+    const inGroup = bins.filter(b => (b.kind || 'dev') === kind);
+    if (!inGroup.length) return;
+    const og = document.createElement('optgroup');
+    og.label = title + ' (' + inGroup.length + ')';
+    inGroup.forEach(b => {
+      const o = document.createElement('option');
+      o.value = b.path;
+      const when = b.mtime ? new Date(b.mtime * 1000).toISOString().slice(0, 10) : '?';
+      o.textContent = b.label + (kind === 'dev' ? ' · built ' + when : '') + (b.is_default ? ' — default' : '');
+      o.title = b.path;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  if (!bins.length) {
+    const o = document.createElement('option');
+    o.value = '/home/you/llama.cpp/build/bin/llama-server';
+    o.textContent = 'no builds found — set path below';
+    sel.appendChild(o);
+  }
+  if (prev && Array.from(sel.options).some(o => o.value === prev)) sel.value = prev;
+  if (statusEl) statusEl.textContent = bins.length + ' llama-server build(s) found';
+}
+
+// ── Helpers ──
+function getCfg() {
+  const boolFields = ['no_mmap','speculative','preserve_thinking','mlock','direct_io',
+    'cpu_strict','cpu_strict_batch','kv_offload','swa_full','cmoe','context_shift','no_repack','no_host',
+    'fit','op_offload','ignore_eos','conversation','single_turn','multiline_input','no_warmup','no_display_prompt',
+    'special','backend_sampling','jinja','mmproj_auto','mmproj_offload','check_tensors',
+    'log_disable','log_timestamps','offline','no_perf','show_timings','spec_draft_cpu_moe','spec_draft_backend_sampling',
+    'skip_chat_parsing','kv_unified','log_verbose'];
+  // NOTE: any new checkbox MUST be listed above. A checkbox left out is read as
+  // el.value, and a checkbox's .value is the literal "on" whether or not it is
+  // checked — so the flag gets emitted unconditionally and the checkbox becomes
+  // decorative (this is exactly how --kv-unified and --verbose used to leak into
+  // every launch).
+  const intFields = ['port','pipeline','ngl','parallel','threads','threads_batch','prio','poll','prio_batch',
+    'ctx_size','n_predict','batch','ubatch','keep','main_gpu','fit_ctx','n_cmoe','spec_n_max','spec_n_min',
+    'top_k','seed','repeat_last_n','dry_allowed_length','mirostat','cache_ram','ctx_checkpoints',
+    'log_verbosity','reasoning_budget'];
+  const floatFields = ['rope_scale','rope_freq_scale','yarn_ext_factor','yarn_attn_factor','yarn_beta_slow','yarn_beta_fast',
+    'spec_p_split','spec_p_min','temp','top_p','min_p','top_n_sigma','typical_p','xtc_probability','xtc_threshold',
+    'repeat_penalty','presence_penalty','frequency_penalty','dry_multiplier','dry_base','dry_penalty_last_n',
+    'adaptive_target','adaptive_decay','dynatemp_range','dynatemp_exp','mirostat_lr','mirostat_ent'];
+  const cfg = {};
+  cfg.name = document.getElementById('profileName').value;
+  cfg.llama_server = document.getElementById('llama_server').value;
+  cfg.model = document.getElementById('model').value;
+  document.querySelectorAll('input, select').forEach(el => {
+    if (!el.id) return;
+    const id = el.id;
+    if (id === 'reasoning_preserve') { cfg.reasoning_preserve = el.value === 'auto' ? null : (el.value === 'on'); return; }
+    // Kind comes from the ELEMENT, not from the name lists: that indirection is
+    // what let --kv-unified/--verbose leak into every launch. The lists remain
+    // only to distinguish int vs float.
+    if (el.type === 'checkbox') { cfg[id] = el.checked; return; }
+    if (intFields.includes(id)) {
+      const n = parseInt(el.value, 10);
+      if (!Number.isNaN(n)) cfg[id] = n;          // empty field -> omit -> server default
+      return;
+    }
+    if (floatFields.includes(id)) {
+      const n = parseFloat(el.value);
+      if (!Number.isNaN(n)) cfg[id] = n;
+      return;
+    }
+    if (el.type === 'number') {
+      const n = Number(el.value);
+      if (!Number.isNaN(n)) cfg[id] = n;
+      return;
+    }
+    cfg[id] = el.value;
+  });
+  return cfg;
+}
+
+function setCfg(cfg) {
+  Object.keys(cfg).forEach(k => {
+    const el = document.getElementById(k);
+    if (!el) return;
+    if (el.type === 'checkbox') { el.checked = !!cfg[k]; return; }
+    if (el.tagName === 'SELECT') {
+      let v;
+      if (k === 'reasoning_preserve') {
+        // tri-state select: null/absent=auto, true=on, false=off (also accept string forms
+        // so legacy profiles that stored the boolean map onto the right option)
+        v = (cfg[k] === true || cfg[k] === 'on' || cfg[k] === 'true') ? 'on'
+          : (cfg[k] === false || cfg[k] === 'off' || cfg[k] === 'false') ? 'off'
+          : 'auto';
+      } else {
+        v = (cfg[k] === null || cfg[k] === undefined) ? '' : String(cfg[k]);
+      }
+      if (Array.from(el.options).some(o => o.value === v)) { el.value = v; return; }
+      // Path-valued dropdowns are populated by a scan, so an imported/saved path
+      // may not be in the list (build or model added after the last scan, path
+      // outside the scanned roots). Without an option the <select> silently keeps
+      // whatever was selected before — launching a different binary/model than the
+      // one the user imported. Offer the path instead.
+      if ((k === 'llama_server' || k === 'model') && v) {
+        const o = document.createElement('option');
+        o.value = v;
+        o.textContent = v.split('/').slice(-3, -2).join('') + ' (not scanned)';
+        o.title = v;
+        el.appendChild(o);
+        el.value = v;
+      }
+      return;
+    }
+    el.value = cfg[k];
+  });
+  updateCommand();
+  snapshotNow();
+}
+
+function clearActive() { document.querySelectorAll('.profile-item').forEach(i => i.classList.remove('active')); }
+
+// ── Command preview (server-backed: single source of truth with launch) ──
+let _updTimer = null;
+function updateCommand() {
+  const box = document.getElementById('commandBox');
+  checkDirty();
+  if (_updTimer) clearTimeout(_updTimer);
+  _updTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/build-command', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(getCfg())
+      });
+      if (!r.ok) { box.textContent = 'Preview unavailable (' + r.status + ')'; return; }
+      const d = await r.json();
+      box.textContent = d.command;
+      const ol = document.getElementById('cmdOneline');
+      if (ol) ol.textContent = d.command;
+    } catch (e) {
+      if (box) box.textContent = 'Preview unavailable: ' + e.message;
+    }
+  }, 60);
+}
+
+// ── Dirty state: pill in the launch bar when the form differs from the last
+// saved/loaded profile snapshot. Snapshot is taken on save and on profile load.
+let savedSnapshot = null;
+function snapshotNow() { savedSnapshot = JSON.stringify(getCfg()); checkDirty(); }
+function checkDirty() {
+  const pill = document.getElementById('dirtyPill');
+  if (!pill) return;
+  if (savedSnapshot === null) { pill.classList.remove('on'); return; }
+  let cur;
+  try { cur = JSON.stringify(getCfg()); } catch (e) { return; }
+  pill.classList.toggle('on', cur !== savedSnapshot);
+}
+
+// ── Profiles ──
+async function saveProfile() {
+  const cfg = getCfg();
+  if (!cfg.name.trim()) { toast('Enter a profile name', 'error'); return; }
+  const r = await fetch('/api/profiles', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
+  if (r.ok) { toast('Profile "' + cfg.name + '" saved', 'success'); snapshotNow(); refreshProfiles(); }
+  else { const d = await r.json(); toast('Save failed: ' + (d.detail || d.error || 'check config'), 'error'); }
+}
+
+async function loadProfile(name) {
+  const cfg = profiles[name];
+  if (!cfg) return;
+  clearActive();
+  document.querySelector('.profile-item[data-name="' + name + '"]')?.classList.add('active');
+  document.getElementById('profileName').value = name;
+  setCfg(cfg);
+}
+
+async function deleteProfile(name) {
+  if (!confirm('Delete profile "' + name + '"?')) return;
+  await fetch('/api/profiles/' + encodeURIComponent(name), { method: 'DELETE' });
+  toast('Profile deleted', 'success');
+  refreshProfiles();
+}
+
+async function refreshProfiles() {
+  const r = await fetch('/api/profiles');
+  profiles = await r.json();
+  renderSidebarProfiles();
+}
+
+let profileFilter = '';
+function filterProfiles() {
+  profileFilter = (document.getElementById('profileSearch').value || '').toLowerCase();
+  renderSidebarProfiles();
+}
+
+function renderSidebarProfiles() {
+  const list = document.getElementById('profileList');
+  list.innerHTML = '';
+  const names = Object.keys(profiles).filter(n => n.toLowerCase().includes(profileFilter));
+  if (!names.length) { list.innerHTML = '<div class="empty-state">' + (profileFilter ? 'No match for "' + profileFilter + '"' : 'No profiles yet') + '</div>'; return; }
+  // DOM built without innerHTML/inline-onclick interpolation: a profile name
+  // containing markup or quotes can no longer inject script or break handlers.
+  names.forEach(name => {
+    const div = document.createElement('div');
+    div.className = 'profile-item';
+    div.dataset.name = name;
+    div.onclick = () => loadProfile(name);
+    const span = document.createElement('span');
+    span.className = 'name';
+    span.textContent = name;
+    span.title = name;
+    const btn = document.createElement('button');
+    btn.className = 'delete-btn';
+    btn.title = 'Delete';
+    btn.textContent = '\u00d7';
+    btn.onclick = (e) => { e.stopPropagation(); deleteProfile(name); };
+    div.appendChild(span);
+    div.appendChild(btn);
+    list.appendChild(div);
+  });
+}
+
+// ── Launch / Stop ──
+async function launchServer() {
+  const cfg = getCfg();
+  const r = await fetch('/api/launch', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
+  const data = await r.json();
+  if (r.ok) { toast('Launched PID ' + data.pid, 'success'); updateStatus(); }
+  else toast(data.error || 'Failed', 'error');
+}
+
+async function stopServer() {
+  const r = await fetch('/api/stop', { method: 'POST' });
+  if (r.ok) { toast('Server stopped', 'success'); updateStatus(); }
+}
+
+async function updateStatus() {
+  const port = parseInt(document.getElementById('port').value) || 8080;
+  let data = {};
+  try { data = await (await fetch('/api/status?port=' + port)).json(); } catch (e) { return; }
+  const badge = document.getElementById('statusBadge');
+  const text = document.getElementById('statusText');
+  const launchBtn = document.getElementById('launchBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  if (data.status === 'running') {
+    badge.className = 'status-badge running';
+    text.textContent = 'Running (PID ' + data.pid + ')';
+    launchBtn.style.display = 'none';
+    stopBtn.style.display = '';
+  } else if (data.status === 'external') {
+    // A llama-server owns the port but was NOT started by this GUI — show it,
+    // keep Launch available (it will be refused with a clear message), hide Stop.
+    badge.className = 'status-badge external';
+    text.textContent = 'External server on :' + port + ' (not GUI-owned)';
+    launchBtn.style.display = '';
+    stopBtn.style.display = 'none';
+  } else {
+    badge.className = 'status-badge stopped';
+    text.textContent = 'Stopped';
+    launchBtn.style.display = '';
+    stopBtn.style.display = 'none';
+  }
+}
+
+async function fetchLogs() {
+  try {
+    const r = await fetch('/api/logs?limit=100');
+    const data = await r.json();
+    document.getElementById('logsBox').textContent = data.lines.join('\n') || 'No logs yet.';
+  } catch (e) { /* GUI unreachable — keep last log box contents */ }
+}
+
+// ── UI helpers ──
+function toggleSection(hdr) {
+  const body = hdr.nextElementSibling;
+  body.classList.toggle('collapsed');
+  const arrow = hdr.querySelector('span');
+  if (arrow) arrow.textContent = body.classList.contains('collapsed') ? '▸' : '▾';
+}
+
+// Declutter: advanced/arcane sections start collapsed so the first screen
+// shows the essential workflow (model, network, context, sampling, command,
+// launch). No parameters are removed — each is one click away.
+function collapseAdvanced() {
+  const collapse = [
+    'CPU', 'Model Loading', 'KV Cache', 'RoPE Scaling', 'LoRA & Control Vectors',
+    'Speculative Decoding', 'DRY Sampling', 'Adaptive-p & Dynamic Temp',
+    'Mirostat', 'Grammar & JSON Schema', 'Multimodal', 'Override & Debug'
+  ];
+  document.querySelectorAll('.settings-panel .section-header[onclick]').forEach(hdr => {
+    const label = hdr.textContent.replace(/[▾▸]/g, '').trim();
+    if (collapse.includes(label)) {
+      const body = hdr.nextElementSibling;
+      if (body) body.classList.add('collapsed');
+      const span = hdr.querySelector('span');
+      if (span) span.textContent = '▸';
+    }
+  });
+}
+
+function toggleSpec() {
+  const on = document.getElementById('speculative').checked;
+  ['spec_n_max_field','spec_n_min_field','spec_p_split_field','spec_p_min_field'].forEach(id => {
+    document.getElementById(id).style.display = on ? '' : 'none';
+  });
+}
+
+// ===PARSE-CORE-START===
+// Pure parser: llama-server command string -> { cfg, unknown, server }.
+// No DOM access (unit-testable). cfg keys mirror server.py Config so the
+// built command round-trips. Returns a PARTIAL cfg: only flags the command
+// actually carried, so callers can merge over a known neutral default.
+function parseLlamaCommand(raw) {
+  // canonical long-flag table: name (no leading --) -> { key, val | neg }
+  //   val:1  -> takes a value, stored on key
+  //   neg:1  -> boolean ON, stored on key
+  //   neg:0  -> boolean OFF, stored on key (i.e. a --no-* that negates `key`)
+  const LONG = {
+    model:{key:'model',val:1}, "model-url":{key:'model_url',val:1},
+    "hf-repo":{key:'hf_repo',val:1}, "hf-file":{key:'hf_file',val:1}, "hf-token":{key:'hf_token',val:1},
+    host:{key:'host',val:1}, port:{key:'port',val:1}, parallel:{key:'parallel',val:1},
+    alias:{key:'alias',val:1}, timeout:{key:'timeout',val:1},
+    threads:{key:'threads',val:1}, "threads-batch":{key:'threads_batch',val:1}, prio:{key:'prio',val:1},
+    poll:{key:'poll',val:1}, "prio-batch":{key:'prio_batch',val:1},
+    "cpu-mask":{key:'cpu_mask',val:1}, "cpu-range":{key:'cpu_range',val:1}, "cpu-strict":{key:'cpu_strict',neg:1},
+    "cpu-mask-batch":{key:'cpu_mask_batch',val:1}, "cpu-range-batch":{key:'cpu_range_batch',val:1},
+    "cpu-strict-batch":{key:'cpu_strict_batch',neg:1},
+    "n-gpu-layers":{key:'ngl',val:1}, "gpu-layers":{key:'ngl',val:1}, device:{key:'device',val:1},
+    "split-mode":{key:'split_mode',val:1}, "tensor-split":{key:'tensor_split',val:1},
+    "main-gpu":{key:'main_gpu',val:1}, fit:{key:'fit',val:1}, "fit-target":{key:'fit_target',val:1},
+    "fit-ctx":{key:'fit_ctx',val:1}, "op-offload":{key:'op_offload',neg:1}, "no-op-offload":{key:'op_offload',neg:0},
+    "cpu-moe":{key:'cmoe',neg:1}, "n-cpu-moe":{key:'n_cmoe',val:1},
+    "ctx-size":{key:'ctx_size',val:1}, "n-predict":{key:'n_predict',val:1}, predict:{key:'n_predict',val:1},
+    "batch-size":{key:'batch',val:1}, "ubatch-size":{key:'ubatch',val:1}, keep:{key:'keep',val:1},
+    "context-shift":{key:'context_shift',neg:1}, "no-context-shift":{key:'context_shift',neg:0},
+    "load-mode":{key:'load_mode',val:1}, mmap:{key:'no_mmap',neg:0}, "no-mmap":{key:'no_mmap',neg:1},
+    mlock:{key:'mlock',neg:1}, "direct-io":{key:'direct_io',neg:1}, "no-direct-io":{key:'direct_io',neg:0},
+    numa:{key:'numa',val:1}, "no-repack":{key:'no_repack',neg:1}, repack:{key:'no_repack',neg:0},
+    "no-host":{key:'no_host',neg:1},
+    "flash-attn":{key:'flash_attn',val:1},
+    "cache-type-k":{key:'cache_k',val:1}, "cache-type-v":{key:'cache_v',val:1},
+    "kv-offload":{key:'kv_offload',neg:1}, "no-kv-offload":{key:'kv_offload',neg:0},
+    "kv-unified":{key:'kv_unified',neg:1}, "no-kv-unified":{key:'kv_unified',neg:0},
+    "swa-full":{key:'swa_full',neg:1}, "cache-ram":{key:'cache_ram',val:1}, "ctx-checkpoints":{key:'ctx_checkpoints',val:1},
+    "rope-scaling":{key:'rope_scaling',val:1}, "rope-scale":{key:'rope_scale',val:1},
+    "rope-freq-base":{key:'rope_freq_base',val:1}, "rope-freq-scale":{key:'rope_freq_scale',val:1},
+    "yarn-orig-ctx":{key:'yarn_orig_ctx',val:1}, "yarn-ext-factor":{key:'yarn_ext_factor',val:1},
+    "yarn-attn-factor":{key:'yarn_attn_factor',val:1}, "yarn-beta-slow":{key:'yarn_beta_slow',val:1},
+    "yarn-beta-fast":{key:'yarn_beta_fast',val:1},
+    lora:{key:'lora',val:1}, "lora-scaled":{key:'lora_scaled',val:1},
+    "control-vector":{key:'control_vector',val:1}, "control-vector-scaled":{key:'control_vector_scaled',val:1},
+    "spec-type":{key:'spec_type',val:1}, "spec-draft-model":{key:'spec_draft_model',val:1},
+    "spec-draft-n-max":{key:'spec_n_max',val:1}, "spec-draft-n-min":{key:'spec_n_min',val:1},
+    "spec-draft-p-split":{key:'spec_p_split',val:1}, "spec-draft-p-min":{key:'spec_p_min',val:1},
+    "spec-draft-threads":{key:'spec_draft_threads',val:1}, "spec-draft-ngl":{key:'spec_draft_ngl',val:1},
+    "spec-draft-device":{key:'spec_draft_device',val:1}, "spec-draft-type-k":{key:'spec_draft_cache_k',val:1},
+    "spec-draft-type-v":{key:'spec_draft_cache_v',val:1}, "spec-draft-cpu-moe":{key:'spec_draft_cpu_moe',neg:1},
+    "spec-draft-n-cpu-moe":{key:'spec_draft_n_cpu_moe',val:1},
+    "spec-draft-backend-sampling":{key:'spec_draft_backend_sampling',neg:1},
+    "no-spec-draft-backend-sampling":{key:'spec_draft_backend_sampling',neg:0},
+    "spec-draft-hf":{key:'spec_draft_hf',val:1}, "spec-draft-threads-batch":{key:'spec_draft_threads_batch',val:1},
+    "spec-draft-cpu-mask":{key:'spec_draft_cpu_mask',val:1}, "spec-draft-cpu-range":{key:'spec_draft_cpu_range',val:1},
+    "spec-draft-cpu-mask-batch":{key:'spec_draft_cpu_mask_batch',val:1}, "spec-draft-override-tensor":{key:'spec_draft_override_tensor',val:1},
+    "cache-type-k-draft":{key:'spec_draft_cache_k',val:1}, "cache-type-v-draft":{key:'spec_draft_cache_v',val:1},
+    "spec-default":{key:'spec_default',neg:1},
+    temp:{key:'temp',val:1}, "top-p":{key:'top_p',val:1}, "top-k":{key:'top_k',val:1},
+    "min-p":{key:'min_p',val:1}, "top-n-sigma":{key:'top_n_sigma',val:1}, "typical-p":{key:'typical_p',val:1},
+    "xtc-probability":{key:'xtc_probability',val:1}, "xtc-threshold":{key:'xtc_threshold',val:1},
+    seed:{key:'seed',val:1}, samplers:{key:'samplers',val:1}, "ignore-eos":{key:'ignore_eos',neg:1},
+    "repeat-last-n":{key:'repeat_last_n',val:1}, "repeat-penalty":{key:'repeat_penalty',val:1},
+    "presence-penalty":{key:'presence_penalty',val:1}, "frequency-penalty":{key:'frequency_penalty',val:1},
+    "dry-multiplier":{key:'dry_multiplier',val:1}, "dry-base":{key:'dry_base',val:1},
+    "dry-allowed-length":{key:'dry_allowed_length',val:1}, "dry-penalty-last-n":{key:'dry_penalty_last_n',val:1},
+    "adaptive-target":{key:'adaptive_target',val:1}, "adaptive-decay":{key:'adaptive_decay',val:1},
+    "dynatemp-range":{key:'dynatemp_range',val:1}, "dynatemp-exp":{key:'dynatemp_exp',val:1},
+    mirostat:{key:'mirostat',val:1}, "mirostat-lr":{key:'mirostat_lr',val:1}, "mirostat-ent":{key:'mirostat_ent',val:1},
+    grammar:{key:'grammar',val:1}, "grammar-file":{key:'grammar_file',val:1},
+    "json-schema":{key:'json_schema',val:1}, "json-schema-file":{key:'json_schema_file',val:1},
+    "logit-bias":{key:'logit_bias',val:1},
+    sys:{key:'system_prompt',val:1}, conversation:{key:'conversation',neg:1}, "no-conversation":{key:'conversation',neg:0},
+    "single-turn":{key:'single_turn',neg:1}, "multiline-input":{key:'multiline_input',neg:1},
+    "reverse-prompt":{key:'reverse_prompt',val:1}, "no-warmup":{key:'no_warmup',neg:1},
+    "no-display-prompt":{key:'no_display_prompt',neg:1}, special:{key:'special',neg:1},
+    "backend-sampling":{key:'backend_sampling',neg:1},
+    reasoning:{key:'reasoning',val:1}, "reasoning-budget":{key:'reasoning_budget',val:1},
+    "reasoning-budget-message":{key:'reasoning_budget_message',val:1},
+    "reasoning-preserve":{key:'reasoning_preserve',neg:1}, "no-reasoning-preserve":{key:'reasoning_preserve',neg:0},
+    "reasoning-format":{key:'reasoning_format',val:1}, "reasoning-effort":{key:'reasoning_effort',val:1},
+    "chat-template":{key:'chat_template',val:1}, "chat-template-file":{key:'chat_template_file',val:1},
+    "chat-template-kwargs":{key:'chat_template_kwargs',val:1}, "skip-chat-parsing":{key:'skip_chat_parsing',neg:1},
+    tools:{key:'tools',val:1}, jinja:{key:'jinja',neg:1}, "no-jinja":{key:'jinja',neg:0},
+    mmproj:{key:'mmproj',val:1}, "mmproj-url":{key:'mmproj_url',val:1},
+    "no-mmproj":{key:'mmproj_auto',neg:0}, "mmproj-auto":{key:'mmproj_auto',neg:1},
+    "mmproj-offload":{key:'mmproj_offload',neg:1}, "no-mmproj-offload":{key:'mmproj_offload',neg:0},
+    "image-min-tokens":{key:'image_min_tokens',val:1}, "image-max-tokens":{key:'image_max_tokens',val:1},
+    image:{key:'media_files',val:1}, "mtmd-batch-max-tokens":{key:'mtmd_batch_max_tokens',val:1},
+    "override-tensor":{key:'override_tensor',val:1}, "override-kv":{key:'override_kv',val:1}, "check-tensors":{key:'check_tensors',neg:1},
+    "log-file":{key:'log_file',val:1}, "log-colors":{key:'log_colors',val:1}, "log-verbosity":{key:'log_verbosity',val:1},
+    verbose:{key:'log_verbose',neg:1}, "log-disable":{key:'log_disable',neg:1}, "log-prefix":{key:'log_prefix',neg:1},
+    "no-log-prefix":{key:'log_prefix',neg:0}, "log-timestamps":{key:'log_timestamps',neg:1},
+    offline:{key:'offline',neg:1}, "no-perf":{key:'no_perf',neg:1}, "show-timings":{key:'show_timings',neg:1},
+    "no-show-timings":{key:'show_timings',neg:0}, "defrag-thold":{key:'defrag_thold',val:1},
+    "reuse-port":{key:'reuse_port',neg:1}, slots:{key:'slots',neg:1}, "no-slots":{key:'slots',neg:0},
+    embedding:{key:'embedding',neg:1}, embeddings:{key:'embeddings',neg:1},
+    "cont-batching":{key:'cont_batching',neg:1}, "no-cont-batching":{key:'cont_batching',neg:0},
+    escape:{key:'escape',neg:1}, "no-escape":{key:'escape',neg:0},
+    "cache-list":{key:'cache_list',neg:1}, "lookup-cache-static":{key:'lookup_cache_static',neg:1},
+    "lookup-cache-dynamic":{key:'lookup_cache_dynamic',neg:1}, "slot-prompt-similarity":{key:'slot_prompt_similarity',val:1},
+    "checkpoint-min-step":{key:'checkpoint_min_step',val:1}, "docker-repo":{key:'docker_repo',val:1}
+  };
+  // short flag (no leading -) -> long name (no --)
+  const SHORT = {
+    m:'model', mu:'model-url', hf:'hf-repo', hfr:'hf-repo', hff:'hf-file', hft:'hf-token',
+    c:'ctx-size', n:'predict', b:'batch-size', ub:'ubatch-size', fa:'flash-attn',
+    ngl:'n-gpu-layers', dev:'device', sm:'split-mode', ts:'tensor-split', mg:'main-gpu',
+    fit:'fit', fitt:'fit-target', fitc:'fit-ctx', cmoe:'cpu-moe', ncmoe:'n-cpu-moe',
+    C:'cpu-mask', Cr:'cpu-range', Cb:'cpu-mask-batch', Crb:'cpu-range-batch',
+    t:'threads', tb:'threads-batch', s:'seed', r:'reverse-prompt', l:'logit-bias', sp:'special',
+    j:'json-schema', jf:'json-schema-file', np:'parallel',
+    ctk:'cache-type-k', ctv:'cache-type-v', kvo:'kv-offload', nkvo:'no-kv-offload', kvu:'kv-unified',
+    dio:'direct-io', ndio:'no-direct-io', lm:'load-mode', nr:'repack',
+    mm:'mmproj', mmu:'mmproj-url', a:'alias', to:'timeout', rea:'reasoning',
+    md:'spec-draft-model', td:'spec-draft-threads', tbd:'spec-draft-threads-batch',
+    Cd:'spec-draft-cpu-mask', Crd:'spec-draft-cpu-range', Cbd:'spec-draft-cpu-mask-batch',
+    otd:'spec-draft-override-tensor', ngld:'spec-draft-ngl', devd:'spec-draft-device',
+    ctkd:'spec-draft-type-k', ctvd:'spec-draft-type-v', hfd:'spec-draft-hf', hfrd:'spec-draft-hf',
+    bs:'backend-sampling', cram:'cache-ram', dt:'defrag-thold', e:'escape', cl:'cache-list',
+    lcs:'lookup-cache-static', lcd:'lookup-cache-dynamic', cms:'checkpoint-min-step',
+    sps:'slot-prompt-similarity', cb:'cont-batching', nocb:'no-cont-batching', ag:'agent',
+    v:'verbose', lv:'log-verbosity', ot:'override-tensor', dr:'docker-repo'
+  };
+  const intFields = ['port','pipeline','ngl','parallel','threads','threads_batch','prio','poll','prio_batch',
+    'ctx_size','n_predict','batch','ubatch','keep','main_gpu','fit_ctx','n_cmoe','spec_n_max','spec_n_min',
+    'top_k','seed','repeat_last_n','dry_allowed_length','mirostat','cache_ram','ctx_checkpoints',
+    'log_verbosity','reasoning_budget','defrag_thold','timeout','slot_prompt_similarity'];
+  const floatFields = ['rope_scale','rope_freq_scale','yarn_ext_factor','yarn_attn_factor','yarn_beta_slow','yarn_beta_fast',
+    'spec_p_split','spec_p_min','temp','top_p','min_p','top_n_sigma','typical_p','xtc_probability','xtc_threshold',
+    'repeat_penalty','presence_penalty','frequency_penalty','dry_multiplier','dry_base','dry_penalty_last_n',
+    'adaptive_target','adaptive_decay','dynatemp_range','dynatemp_exp','mirostat_lr','mirostat_ent'];
+
+  // 1) strip line continuations, 2) drop full-line comments, 3) join
+  const cleaned = String(raw)
+    .replace(/\\\s*\n/g, ' ')
+    .split('\n')
+    .filter(l => !/^\s*#/.test(l))
+    .join(' ')
+    .trim();
+
+  // tokenize, honoring single/double quotes (q[] mirrors token quote marks)
+  let tokens = [];
+  let q = [];
+  const re = /(?:[^\s"']+|"[^"]*"|'[^']*')/g;
+  let m;
+  while ((m = re.exec(cleaned)) !== null) {
+    let t = m[0];
+    const qm = (t.length >= 2 && ((t[0] === '"' && t[t.length-1] === '"') || (t[0] === "'" && t[t.length-1] === "'"))) ? t[0] : '';
+    if (qm) t = t.slice(1, -1);
+    tokens.push(t);
+    q.push(qm);
+  }
+
+  // 0) Launch environment and wrappers. `FOO=bar taskset -c 0-11 ./llama-server ...`
+  //    is how the process really gets started; these are NOT llama-server flags,
+  //    so they must be captured (dropping them silently changes behaviour).
+  const isEnv = (s) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(s);
+  const envPairs = [];
+  const wrapper = [];
+  let start = 0;
+  const eatEnv = () => { while (start < tokens.length && isEnv(tokens[start])) { envPairs.push(tokens[start]); start++; } };
+  eatEnv();
+  while (start < tokens.length && ['taskset', 'env', 'nice'].includes(tokens[start])) {
+    const w = tokens[start];
+    wrapper.push(w);
+    if (w === 'taskset' && start + 2 < tokens.length && /^(-c|--cpu-set)$/.test(tokens[start + 1])) {
+      wrapper.push(tokens[start + 1], tokens[start + 2]); start += 3;
+    } else if (w === 'nice' && start + 2 < tokens.length && /^-[n]+$/.test(tokens[start + 1])) {
+      wrapper.push(tokens[start + 1], tokens[start + 2]); start += 3;
+    } else {
+      start += 1;
+    }
+    eatEnv();
+  }
+  tokens = tokens.slice(start);
+  q = q.slice(start);
+
+  const cfg = {};
+  const unknown = [];
+  const extra_args = [];               // verbatim safety net for flags we do not model
+  let sawSpec = false, sawAgent = false, server = '', sawFlag = false;
+  const applyKwargs = (v) => {
+    try { const kj = JSON.parse(v); if (kj && kj.preserve_thinking) cfg.preserve_thinking = true; } catch (e) {}
+  };
+  const isFlagish = (s) => s && (s.startsWith('-') && !/^-\d/.test(s));
+  const recon = (a, b, ia, ib) => {     // rebuild a token pair with original quoting
+    let out = a;
+    const qb = (b === undefined) ? '' : q[ib];
+    if (b !== undefined) out += ' ' + (qb ? qb + b + qb : b);
+    return out;
+  };
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    // The binary is the first non-flag token before any flag shows up — it can
+    // sit after env assignments/wrappers, not only at index 0.
+    if (!tok.startsWith('-') && !sawFlag && !server) { server = tok; continue; }
+    if (tok.startsWith('-')) sawFlag = true;
+    if (tok.startsWith('--')) {
+      const eq = tok.indexOf('=');
+      const name = eq >= 0 ? tok.slice(2, eq) : tok.slice(2);
+      const inlineVal = eq >= 0 ? tok.slice(eq + 1) : null;
+      const spec = LONG[name];
+      if (name === 'agent') { sawAgent = true; continue; }
+      if (name === 'no-agent') { continue; }
+      if (!spec) {
+        unknown.push('--' + name);
+        if (inlineVal === null && i + 1 < tokens.length && !isFlagish(tokens[i+1])) { extra_args.push(recon(tok, tokens[i+1], i, i+1)); i++; }
+        else extra_args.push(tok);
+        continue;
+      }
+      if (spec.val) {
+        let v = inlineVal, took = false;
+        if (v === null) {
+          if (i + 1 < tokens.length && (!isFlagish(tokens[i+1]))) { v = tokens[++i]; took = true; }
+        }
+        cfg[spec.key] = (v === undefined) ? '' : v;
+        if (spec.key === 'chat_template_kwargs') applyKwargs(v);
+        if (name.startsWith('spec-')) sawSpec = true;
+        if (!took && inlineVal === null) extra_args.push(tok);
+      } else {
+        cfg[spec.key] = !!spec.neg;
+        if (name.startsWith('spec-')) sawSpec = true;
+      }
+    } else if (tok.startsWith('-') && tok.length > 1) {
+      const name = tok.slice(1);
+      const longName = SHORT[name];
+      const spec = longName ? LONG[longName] : null;
+      if (!spec) {
+        unknown.push(tok);
+        if (i + 1 < tokens.length && !isFlagish(tokens[i+1])) { extra_args.push(recon(tok, tokens[i+1], i, i+1)); i++; }
+        else extra_args.push(tok);
+        continue;
+      }
+      if (spec.val) {
+        let v, took = false;
+        if (i + 1 < tokens.length && (!isFlagish(tokens[i+1]))) { v = tokens[++i]; took = true; }
+        cfg[spec.key] = (v === undefined) ? '' : v;
+        if (spec.key === 'chat_template_kwargs') applyKwargs(v);
+        if (longName.startsWith('spec-')) sawSpec = true;
+        if (!took) extra_args.push(tok);
+      } else {
+        cfg[spec.key] = !!spec.neg;
+        if (longName.startsWith('spec-')) sawSpec = true;
+      }
+    } else {
+      unknown.push(tok); // stray value token
+    }
+  }
+
+  if (envPairs.length) cfg.env = envPairs.join(' ');
+  if (wrapper.length) cfg.exec_prefix = wrapper.map(t => (/^[A-Za-z0-9_.,:/=+-]+$/.test(t) ? t : "'" + t.replace(/'/g, "'\\''") + "'")).join(' ');
+  cfg.speculative = sawSpec;                       // only enable spec if the command asked for it
+  if (sawAgent && !cfg.tools) cfg.tools = 'all';  // --agent enables all built-in tools
+  if ('fit' in cfg) cfg.fit = (String(cfg.fit).toLowerCase() !== 'off'); // --fit off => OFF (binary flag)
+  if (extra_args.length) cfg.extra_args = extra_args.join(' ');          // verbatim safety net
+  Object.keys(cfg).forEach(k => {
+    if (intFields.includes(k)) { const n = parseInt(cfg[k], 10); if (!isNaN(n)) cfg[k] = n; }
+    else if (floatFields.includes(k)) { const n = parseFloat(cfg[k]); if (!isNaN(n)) cfg[k] = n; }
+  });
+  return { cfg, unknown, server };
+}
+// ===PARSE-CORE-END===
+
+// Neutral per-field defaults (mirror server.py Config) so an import yields a
+// COMPLETE config: parsed flags override these, everything else stays at the
+// builder's neutral value instead of leaking the form's checked defaults.
+function serverDefaults() {
+  return {
+    host:'127.0.0.1', port:8080, pipeline:1, parallel:1, alias:'',
+    model_url:'', hf_repo:'', hf_file:'', env:'', exec_prefix:'',
+    threads:6, threads_batch:0, prio:0, poll:50, prio_batch:0,
+    cpu_mask:'', cpu_range:'', cpu_strict:false, cpu_mask_batch:'', cpu_range_batch:'', cpu_strict_batch:false,
+    ngl:-1, device:'', split_mode:'layer', tensor_split:'', main_gpu:0, fit:true, fit_target:'1024',
+    fit_ctx:4096, op_offload:true, cmoe:false, n_cmoe:0,
+    ctx_size:100400, n_predict:-1, batch:2048, ubatch:128, keep:0, context_shift:false,
+    no_mmap:true, mlock:false, direct_io:false, load_mode:'mmap', numa:'none', no_repack:false, no_host:false,
+    flash_attn:'auto', cache_k:'q4_0', cache_v:'q4_0', kv_offload:true, swa_full:false, cache_ram:8192, ctx_checkpoints:32,
+    kv_unified:false,
+    rope_scaling:'linear', rope_scale:1.0, rope_freq_base:'', rope_freq_scale:1.0,
+    yarn_orig_ctx:'', yarn_ext_factor:-1.0, yarn_attn_factor:-1.0, yarn_beta_slow:-1.0, yarn_beta_fast:-1.0,
+    lora:'', lora_scaled:'', control_vector:'', control_vector_scaled:'',
+    speculative:true, spec_draft_model:'', spec_type:'draft-mtp', spec_n_max:3, spec_n_min:0,
+    spec_p_split:0.10, spec_p_min:0.0, spec_draft_threads:'', spec_draft_ngl:'', spec_draft_device:'',
+    spec_draft_cache_k:'f16', spec_draft_cache_v:'f16', spec_draft_cpu_moe:false, spec_draft_n_cpu_moe:0,
+    spec_draft_backend_sampling:true,
+    temp:0.8, top_p:0.95, top_k:20, min_p:0.0, top_n_sigma:-1.0, typical_p:1.0,
+    xtc_probability:0.0, xtc_threshold:0.10, seed:-1, samplers:'', ignore_eos:false,
+    repeat_last_n:64, repeat_penalty:1.0, presence_penalty:0.0, frequency_penalty:0.0,
+    dry_multiplier:0.0, dry_base:1.75, dry_allowed_length:2, dry_penalty_last_n:-1,
+    adaptive_target:-1.0, adaptive_decay:0.90, dynatemp_range:0.0, dynatemp_exp:1.0,
+    mirostat:0, mirostat_lr:0.10, mirostat_ent:5.0,
+    grammar:'', grammar_file:'', json_schema:'', json_schema_file:'', logit_bias:'',
+    system_prompt:'', conversation:true, single_turn:false, multiline_input:false, reverse_prompt:'',
+    no_warmup:false, no_display_prompt:false, special:false, backend_sampling:false,
+    preserve_thinking:false, reasoning:'auto', reasoning_budget:-1, reasoning_budget_message:'',
+    reasoning_preserve:null, chat_template:'auto', chat_template_file:'', skip_chat_parsing:false,
+    tools:'', jinja:true, extra_args:'',
+    mmproj:'', mmproj_auto:true, mmproj_offload:true, image_min_tokens:'', image_max_tokens:'', media_files:'',
+    override_tensor:'', override_kv:'', check_tensors:false,
+    log_file:'', log_colors:'auto', log_verbosity:1, log_verbose:false, log_disable:false,
+    log_prefix:true, log_timestamps:false, offline:false, no_perf:false, show_timings:true
+  };
+}
+
+function parseCliCommand() {
+  const raw = document.getElementById('cliPaste').value.trim();
+  if (!raw) return;
+  const parsed = parseLlamaCommand(raw);
+  const full = Object.assign({}, serverDefaults(), parsed.cfg);
+  // Apply the binary the imported command actually used (it used to be parsed
+  // and then thrown away, so the launch silently kept whatever the dropdown
+  // happened to show — i.e. possibly a different llama.cpp build).
+  if (parsed.server) {
+    let s = parsed.server.trim();
+    if (s === '~' || s.startsWith('~/')) s = (window.__HOME || '/home/you') + s.slice(1);
+    if (!s.startsWith('/')) s = s; // leave relative paths alone; server resolves them
+    full.llama_server = s;
+    const custom = document.getElementById('llama_server_custom');
+    if (custom) custom.value = s;
+  }
+  setCfg(full);
+  // Auto-name from model
+  if (parsed.cfg.model) {
+    const basename = parsed.cfg.model.split('/').pop().replace('.gguf', '');
+    document.getElementById('profileName').value = basename;
+  }
+  const applied = Object.keys(parsed.cfg).length;
+  const warn = parsed.unknown.length ? '  -  ' + parsed.unknown.length + ' unrecognized flag(s) ignored: ' + parsed.unknown.join(' ') : '';
+  toast('Command parsed - ' + applied + ' settings applied' + (warn ? ' (' + parsed.unknown.length + ' ignored)' : ''), parsed.unknown.length ? 'warn' : 'success');
+}
+
+// ── Log rail toggle (wide 16:9 mode: hide rail, flow form 2-up) ──
+function setLogsVisible(on) {
+  document.body.classList.toggle('no-logs', !on);
+  const b = document.getElementById('logsToggle');
+  if (b) b.textContent = on ? 'Hide logs' : 'Show logs';
+}
+function toggleLogs() { setLogsVisible(document.body.classList.contains('no-logs')); }
+
+// ── Keyboard shortcuts (desktop-only app — no touch compromise needed) ──
+document.addEventListener('keydown', e => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveProfile(); }
+  else if (mod && e.key === 'Enter') { e.preventDefault(); launchServer(); }
+  else if (mod && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); toggleLogs(); }
+  else if (e.key === 'Escape') { setLogsVisible(false); }
+});
+
+// ── Field tooltips: the llama.cpp flag behind every GUI field (names taken
+// from the parse-core LONG/SHORT tables, i.e. exactly what round-trips).
+const FLAG = {
+  llama_server:'(not a flag — binary path)', model:'--model / -m', hf_repo:'--hf-repo / -hfr', hf_file:'--hf-file / -hff',
+  model_url:'--model-url / -mu', env:'(not a flag — process environment)', exec_prefix:'(not a flag — command wrapper)',
+  host:'--host', port:'--port', pipeline:'pipeline stages (server arg)', parallel:'--parallel / -np', alias:'--alias / -a',
+  kv_unified:'--kv-unified / -kvu',
+  threads:'--threads / -t', threads_batch:'--threads-batch / -tb', prio:'--prio', prio_batch:'--prio-batch', poll:'--poll',
+  cpu_mask:'--cpu-mask / -C', cpu_range:'--cpu-range / -Cr', cpu_strict:'--cpu-strict',
+  cpu_mask_batch:'--cpu-mask-batch / -Cb', cpu_range_batch:'--cpu-range-batch / -Crb', cpu_strict_batch:'--cpu-strict-batch',
+  ngl:'--n-gpu-layers / -ngl', device:'--device / -dev', split_mode:'--split-mode / -sm', tensor_split:'--tensor-split / -ts',
+  main_gpu:'--main-gpu / -mg', fit:'--fit / -fit', fit_target:'--fit-target / -fitt', fit_ctx:'--fit-ctx / -fitc',
+  op_offload:'--op-offload', cmoe:'--cpu-moe / -cmoe', n_cmoe:'--n-cpu-moe / -ncmoe',
+  batch:'--batch-size / -b', ubatch:'--ubatch-size / -ub', ctx_size:'--ctx-size / -c', n_predict:'--n-predict / -n',
+  keep:'--keep', context_shift:'--context-shift',
+  load_mode:'--load-mode / -lm', no_mmap:'--no-mmap', mlock:'--mlock', direct_io:'--direct-io / -dio', numa:'--numa',
+  no_repack:'--no-repack', no_host:'--no-host', flash_attn:'--flash-attn / -fa',
+  cache_k:'--cache-type-k / -ctk', cache_v:'--cache-type-v / -ctv', kv_offload:'--kv-offload / -kvo',
+  swa_full:'--swa-full', cache_ram:'--cache-ram / -cram', ctx_checkpoints:'--ctx-checkpoints',
+  rope_scaling:'--rope-scaling', rope_scale:'--rope-scale', rope_freq_base:'--rope-freq-base', rope_freq_scale:'--rope-freq-scale',
+  yarn_orig_ctx:'--yarn-orig-ctx', yarn_ext_factor:'--yarn-ext-factor', yarn_attn_factor:'--yarn-attn-factor',
+  yarn_beta_slow:'--yarn-beta-slow', yarn_beta_fast:'--yarn-beta-fast',
+  lora:'--lora', lora_scaled:'--lora-scaled', control_vector:'--control-vector', control_vector_scaled:'--control-vector-scaled',
+  speculative:'(umbrella toggle for the --spec-* fields below)',
+  spec_draft_model:'--spec-draft-model / -md', spec_type:'--spec-type', spec_n_max:'--spec-draft-n-max', spec_n_min:'--spec-draft-n-min',
+  spec_p_split:'--spec-draft-p-split', spec_p_min:'--spec-draft-p-min',
+  spec_draft_threads:'--spec-draft-threads / -td', spec_draft_ngl:'--spec-draft-ngl / -ngld', spec_draft_device:'--spec-draft-device / -devd',
+  spec_draft_cache_k:'--cache-type-k-draft / -ctkd', spec_draft_cache_v:'--cache-type-v-draft / -ctvd',
+  spec_draft_cpu_moe:'--spec-draft-cpu-moe', spec_draft_backend_sampling:'--spec-draft-backend-sampling',
+  temp:'--temp', top_p:'--top-p', top_k:'--top-k', min_p:'--min-p', top_n_sigma:'--top-n-sigma', typical_p:'--typical-p',
+  xtc_probability:'--xtc-probability', xtc_threshold:'--xtc-threshold', seed:'--seed / -s', samplers:'--samplers', ignore_eos:'--ignore-eos',
+  repeat_last_n:'--repeat-last-n', repeat_penalty:'--repeat-penalty', presence_penalty:'--presence-penalty', frequency_penalty:'--frequency-penalty',
+  dry_multiplier:'--dry-multiplier', dry_base:'--dry-base', dry_allowed_length:'--dry-allowed-length', dry_penalty_last_n:'--dry-penalty-last-n',
+  adaptive_target:'--adaptive-target', adaptive_decay:'--adaptive-decay', dynatemp_range:'--dynatemp-range', dynatemp_exp:'--dynatemp-exp',
+  mirostat:'--mirostat', mirostat_lr:'--mirostat-lr', mirostat_ent:'--mirostat-ent',
+  grammar:'--grammar', grammar_file:'--grammar-file', json_schema:'--json-schema / -j', json_schema_file:'--json-schema-file / -jf',
+  logit_bias:'--logit-bias / -l',
+  system_prompt:'--sys', conversation:'--conversation', single_turn:'--single-turn', multiline_input:'--multiline-input',
+  reverse_prompt:'--reverse-prompt / -r', reasoning:'--reasoning / -rea', reasoning_format:'--reasoning-format',
+  chat_template_kwargs:'--chat-template-kwargs', reasoning_budget:'--reasoning-budget', reasoning_budget_message:'--reasoning-budget-message',
+  reasoning_preserve:'--reasoning-preserve', preserve_thinking:'merges into --chat-template-kwargs',
+  chat_template:'--chat-template', chat_template_file:'--chat-template-file', skip_chat_parsing:'--skip-chat-parsing',
+  tools:'--tools', jinja:'--jinja', extra_args:'(appended verbatim to the command line)',
+  no_display_prompt:'--no-display-prompt', special:'--special / -sp', no_warmup:'--no-warmup', backend_sampling:'--backend-sampling / -bs',
+  mmproj:'--mmproj / -mm', mmproj_auto:'--mmproj / --no-mmproj', mmproj_offload:'--mmproj-offload',
+  image_min_tokens:'--image-min-tokens', image_max_tokens:'--image-max-tokens', media_files:'--image',
+  override_tensor:'--override-tensor / -ot', override_kv:'--override-kv', check_tensors:'--check-tensors',
+  log_file:'--log-file', log_colors:'--log-colors', log_verbosity:'--log-verbosity / -lv', log_verbose:'--verbose / -v',
+  log_disable:'--log-disable', log_timestamps:'--log-timestamps', offline:'--offline', no_perf:'--no-perf', show_timings:'--show-timings'
+};
+
+// Upgrade every native title attribute inside a field to the instant custom
+// tooltip (CSS [data-tip]:hover::after), prefixing the flag name so the first
+// line of every hover says exactly which llama-server argument it controls.
+function enhanceTooltips() {
+  document.querySelectorAll('.field').forEach(fld => {
+    const ctl = fld.querySelector('input, select');
+    if (!ctl) return;
+    const lab = fld.querySelector('label');
+    const chk = fld.querySelector('.check-label');
+    const desc = (chk && chk.getAttribute('title')) || (lab && lab.getAttribute('title')) || ctl.getAttribute('title') || '';
+    const flag = FLAG[ctl.id] || '';
+    const tip = flag ? flag + '\n' + desc : desc;
+    [lab, chk, ctl].forEach(e => { if (e) { e.removeAttribute('title'); if (tip.trim()) e.setAttribute('data-tip', tip); } });
+  });
+}
+
+function toast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+</script>
+</body>
+</html>
