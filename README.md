@@ -1,41 +1,40 @@
 # Llama Loader GUI
 
 A small web GUI for configuring, saving profiles for, and launching
-[llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` — on your own
+[llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server`. On your own
 machine or **detached on a remote/headless box over SSH**.
 
 It is a launcher and settings manager: it builds the `llama-server` command
 line, starts it, tails its log, and stops it. Model files and the
-`llama-server` binary itself are yours; nothing here talks to any service
+`llama-server` binary itself are your own. Nothing here talks to any service
 outside your machine(s).
 
-Default view — every setting section collapsible, flowing in two columns on a
-wide screen, command preview and launch pinned to the bottom bar:
+Default view, every setting section is collapsible:
 
-![Llama Loader GUI default (wide) view: profile list on the left; settings —
-model, network, remote/SSH, CPU, GPU offloading, batch/context, sampling and
-more — as collapsible sections flowing two-up; Save/Launch pinned to the bottom
+![Llama Loader GUI default (wide) view: profile list on the left; settings 
+(model, network, remote/SSH, CPU, GPU offloading, batch/context, sampling and
+more) as collapsible sections; Save/Launch pinned to the bottom
 bar](docs/screenshot.jpg)
 
 With the log rail shown (one click, or screens under 1500px): the form moves to
 one column and the right rail carries the live command preview and the
 `llama-server` log tail:
 
-![Llama Loader GUI with the log rail visible: one-column form on the left,
-Command Preview and the rolling server log on the right](docs/screenshot-logs.jpg)
+![Llama Loader GUI with the log rail visible: command Preview and the rolling 
+server log on the right](docs/screenshot-logs.jpg)
 
 ## Features
 
-- **Profile system** — save/load named profiles (model + all settings) to `profiles.json`
-- **One-click launch** — starts `llama-server` with the current config, live CLI preview
-- **Paste a command = run exactly that** — a pasted `llama-server` command line is
+- **Profile system** - save/load named profiles (model + all settings) to `profiles.json`
+- **One-click launch** - starts `llama-server` with the current config, live CLI preview
+- **Paste a command = run exactly that** - a pasted `llama-server` command line is
   reproduced *verbatim* (no silently added flags) until you edit a field
-- **Model & binary scan** — finds `.gguf` models under your models directory and
+- **Model & binary scan** - finds `.gguf` models under your models directory and
   offers the llama.cpp builds it finds on disk
-- **Full tuning** — network, GPU layers, batch/context, KV-cache quantization,
+- **Full tuning** - network, GPU layers, batch/context, KV-cache quantization,
   speculative decoding (MTP/draft), sampling, flash attention, logging
-- **Server log tail** — live view of `llama-server.log`
-- **Remote / headless targets (SSH)** — run `llama-server` on a machine without a
+- **Server log tail** - live view of `llama-server.log`
+- **Remote / headless targets (SSH)** - run `llama-server` on a machine without a
   desktop; launch, status, logs and stop all work against the remote target
 
 ## Tech stack
@@ -63,7 +62,7 @@ cp profiles.example.json profiles.json                # optional example profile
 - One or more `.gguf` model files. The scan root defaults to
   `~/.lmstudio/models`; additional directories can be added in the UI.
 - *(Remote mode only)* an OpenSSH client (`ssh`) and key-based access to the
-  target — see [Remote / headless targets](#remote--headless-targets-ssh).
+  target. See [Remote / headless targets](#remote--headless-targets-ssh).
 
 ## Running
 
@@ -78,7 +77,7 @@ The server binds to `127.0.0.1` only: local access, no auth, nothing exposed.
 ### First steps
 
 1. Pick a **model** (scanned) or type a path, and a **binary** (scanned) or your own.
-2. Tune what you need — every field shows the exact `llama-server` flag it maps to.
+2. Tune what you need, every field shows the exact `llama-server` flag it maps to.
 3. **Launch** (`Ctrl+Enter`). The status badge turns green; the log pane follows
    `llama-server.log`.
 4. **Save** the setup as a named profile for one-click relaunch.
@@ -124,7 +123,7 @@ How it works:
   running after the GUI closes, the SSH session ends, or you navigate away.
   One log + pid file per listen-port under `~/.llamaloader/` on the target.
 - **Status** is decided *on the target* (pidfile + a loopback probe there), not
-  by probing a port on this machine — otherwise a local server would be
+  by probing a port on this machine, otherwise a local server would be
   mistaken for the remote one. `running` = started by this GUI, `external` =
   something else holds the port there (started by hand), `stopped` = neither.
 - **Logs** are tailed on the target and shipped as text; **Stop** signals the
@@ -134,7 +133,7 @@ How it works:
 
 ### One-time setup for a target
 
-Key-based auth only — the GUI never prompts for a password (it would hang with
+Key-based auth only. The GUI never prompts for a password (it would hang with
 nobody able to answer; `BatchMode=yes`), so set the key up once:
 
 ```bash
@@ -143,12 +142,12 @@ ssh-copy-id gpuuser@gpu-box        # once, interactively
 
 If your key has a passphrase, your SSH agent must serve it (a plain
 `ssh-add ~/.ssh/id_ed25519`; on a systemd distro
-`systemctl --user enable --now ssh-agent.socket` keeps one around — the GUI
+`systemctl --user enable --now ssh-agent.socket` keeps one around. The GUI
 also auto-detects `$XDG_RUNTIME_DIR/ssh-agent.socket`, because desktop
 launchers usually start without a session environment).
 
 Use **Test connection** in the Remote/SSH section to check all of this before
-launching; it reports the usual failures in plain text (key not authorized,
+launching. It reports the usual failures in plain text (key not authorized,
 host unreachable, unknown host key).
 
 ### Security notes
@@ -159,7 +158,7 @@ host unreachable, unknown host key).
   recycled by an unrelated process, Stop refuses and tells you to remove the
   stale file yourself rather than kill a stranger.
 - Command injection is closed at the boundary: the target must match
-  `[A-Za-z0-9_.@:+-]`, and every remote path is shell-quoted — with a leading
+  `[A-Za-z0-9_.@:+-]`, and every remote path is shell-quoted with a leading
   `~` deliberately left expandable so home-relative paths work on the target.
 - The GUI listens on `127.0.0.1` only, on purpose: it can launch processes, so
   it is deliberately not reachable from the network.
@@ -167,7 +166,7 @@ host unreachable, unknown host key).
 ### Verbatim import
 
 Pasting an existing `llama-server` command line into the CLI field reproduces
-that command **exactly** — flags the form would otherwise add (`--no-mmap`,
+that command **exactly**. Flags that the form would otherwise add (`--no-mmap`,
 `-ctk/-ctv`, `--fit`, sampling defaults…) stay out until you actually edit a
 field, at which point the command is rebuilt from the form. This composes with
 remote mode: a pasted command runs verbatim **on the target**.
@@ -182,7 +181,7 @@ remote mode: a pasted command runs verbatim **on the target**.
 
 `test_markup.py` is the one that matters most when touching `templates/gui.html`:
 a single unbalanced `<div>` silently collapses the whole layout (the template
-engine renders it happily — only the browser notices).
+engine renders it happily and only the browser notices).
 
 The GUI is served as a single template (`templates/gui.html`); the backend is
 a single FastAPI module (`server.py`).
@@ -192,7 +191,7 @@ a single FastAPI module (`server.py`).
 - `profiles.json` holds your local machine-specific configuration (absolute
   paths, build names) and is gitignored; `profiles.example.json` shows the
   format.
-- No telemetry, no outbound requests — the only things this program connects
+- No telemetry, no outbound requests. The only things this program connects
   to are your own machines (localhost, and the SSH target you fill in).
 
 ## License
