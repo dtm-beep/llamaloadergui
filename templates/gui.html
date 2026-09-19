@@ -9,7 +9,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Llama Loader GUI v2</title>
-<!-- Cache buster: 20260917-05 -->
+<!-- Cache buster: 20260919-01 -->
 <style>
   :root {
     --bg: #15181d; --surface: #1c2026; --surface2: #232830;
@@ -116,8 +116,17 @@
   .btn-ghost { background: transparent; color: var(--text-dim); border-color: var(--border); }
   .btn-ghost:hover { color: var(--text); border-color: var(--text-mut); }
 
-  /* ── Command preview ── */
-  .command-box { background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px; font-family: var(--mono); font-size: 11.5px; color: var(--cyan); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; line-height: 1.6; }
+  /* ── Command preview ──
+     The rail is narrow and the model paths are long, so wrapping must happen
+     at '/' and '=' (renderCommandPreview inserts <wbr>, which adds no character
+     to a copy) — never mid-word. Flags/values/continuations are coloured apart
+     so the eye scans pairs instead of a grey wall, and the box grows into the
+     empty rail height instead of stopping at a fixed 240px. */
+  .command-box { background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px; font-family: var(--mono); font-size: 11.5px; color: var(--cyan); white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; max-height: min(46vh, 560px); min-height: 88px; overflow-y: auto; overflow-x: hidden; line-height: 1.65; }
+  .command-box .c-flag { color: var(--accent); }
+  .command-box .c-arg { color: var(--text); }
+  .command-box .c-cont { color: var(--text-mut); }
+  .copy-cmd-btn { font-size: 10.5px; padding: 3px 8px; }
 
   /* ── Toast ── */
   .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; border-radius: var(--radius); font-size: 12px; font-family: var(--sans); font-weight: 500; z-index: 999; animation: slideIn .2s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
@@ -1203,7 +1212,7 @@
     <!-- Right Panel: Command Preview + Logs -->
     <div class="logs-panel" id="logsPanel">
       <div class="section">
-        <div class="section-header" onclick="toggleSection(this)">Command Preview <span>▾</span></div>
+        <div class="section-header" onclick="toggleSection(this)">Command Preview <button type="button" class="btn btn-sm btn-ghost copy-cmd-btn" onclick="copyCommand(event)" title="Copy the exact command (runnable as shown)">Copy</button> <span>▾</span></div>
         <div class="section-body" style="grid-template-columns:1fr;">
           <div class="command-box" id="commandBox">Loading...</div>
         </div>
@@ -1453,13 +1462,67 @@ function updateCommand() {
       });
       if (!r.ok) { box.textContent = 'Preview unavailable (' + r.status + ')'; return; }
       const d = await r.json();
-      box.textContent = d.command;
+      renderCommandPreview(box, d.command);
       const ol = document.getElementById('cmdOneline');
       if (ol) ol.textContent = d.command;
     } catch (e) {
       if (box) box.textContent = 'Preview unavailable: ' + e.message;
     }
   }, 60);
+}
+
+// ── Command preview: token-aware, break-at-separator rendering ──
+// The rail can be ~360px wide and model paths run 130+ chars, so plain
+// pre-wrap shreds them mid-word (the "every line broken" complaint). Break
+// points come from <wbr> after '/', '=' and ':' — invisible, and crucially
+// they add NO character, so selecting/copying still yields the exact command.
+// Flags are accent-coloured, values plain, continuations muted: pairs read
+// as pairs. Text nodes only (never innerHTML) — a pasted path can hold <>.
+function renderCommandPreview(el, cmd) {
+  el.textContent = '';
+  const lines = String(cmd).split('\n');
+  lines.forEach((line, li) => {
+    if (li) el.appendChild(document.createTextNode('\n'));
+    const m = line.match(/( ?\\)$/);
+    const body = m ? line.slice(0, m.index) : line;
+    body.split(/(\s+)/).forEach(p => {
+      if (!p) return;
+      if (!p.trim()) { el.appendChild(document.createTextNode(p)); return; }
+      const span = document.createElement('span');
+      span.className = /^-/.test(p) ? 'c-flag' : 'c-arg';
+      p.split(/(?<=[/=:])/).forEach((seg, i, arr) => {
+        span.appendChild(document.createTextNode(seg));
+        if (i < arr.length - 1) span.appendChild(document.createElement('wbr'));
+      });
+      el.appendChild(span);
+    });
+    if (m) {
+      const c = document.createElement('span');
+      c.className = 'c-cont';
+      c.textContent = m[1];
+      el.appendChild(c);
+    }
+  });
+}
+
+// Copy the command exactly as the server would run it (textContent: no <wbr>,
+// no injected characters). Clipboard API needs a secure context — the GUI is
+// served on http://127.0.0.1, which counts as one.
+async function copyCommand(ev) {
+  ev.stopPropagation();  // the header click toggles the section
+  const box = document.getElementById('commandBox');
+  const cmd = (box ? box.textContent : '').trim();
+  if (!cmd) { toast('Nothing to copy', 'error'); return; }
+  try {
+    await navigator.clipboard.writeText(cmd);
+    toast('Command copied', 'success');
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = cmd; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Command copied', 'success'); }
+    catch (e2) { toast('Copy failed: ' + e2.message, 'error'); }
+    ta.remove();
+  }
 }
 
 // ── Dirty state: pill in the launch bar when the form differs from the last

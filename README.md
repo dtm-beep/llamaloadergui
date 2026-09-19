@@ -25,7 +25,8 @@ server log on the right](docs/screenshot-logs.jpg)
 
 The log rail is drag-resizable (grab the amber bar between the panels) when the
 long `llama-server` banner in the preview or log needs more room; the width is
-remembered.
+remembered. Each flag and its value sit on one line and long paths break at `/`,
+so nothing is chopped mid-word.
 
 ## Features
 
@@ -38,6 +39,9 @@ remembered.
 - **Full tuning** - network, GPU layers, batch/context, KV-cache quantization,
   speculative decoding (MTP/draft), sampling, flash attention, logging
 - **Server log tail** - live view of `llama-server.log`
+- **Readable command preview** - one flag + its value per line, break points at
+  `/` `=` `:` instead of mid-word shredding, and a **Copy** button that hands over
+  the byte-exact runnable command
 - **Remote / headless targets (SSH)** - run `llama-server` on a machine without a
   desktop; launch, status, logs and stop all work against the remote target
 
@@ -184,6 +188,8 @@ remote mode: a pasted command runs verbatim **on the target**.
 .venv/bin/python tests/test_remote.py       # remote-path tests, no network needed
 .venv/bin/python tests/test_markup.py       # templates/gui.html tag balance & structure
 .venv/bin/python tests/test_parse_core.py   # CLI-import parser (driven under node)
+.venv/bin/python tests/test_render_command.py   # preview formatting + copy fidelity
+.venv/bin/python tests/test_preview_render.py   # preview renderer, break-at-'/' (<wbr>) — node
 ```
 
 `test_markup.py` is the one that matters most when touching `templates/gui.html`:

@@ -560,6 +560,12 @@ def render_command(argv: list, cfg: dict | None = None) -> str:
 
     Includes the env assignments and wrapper so the preview is the *whole*
     launch line, not just argv (otherwise the copied command lies).
+
+    Layout: **one flag with its value on one line** (previously every token
+    got its own line, which in the narrow log rail read as a zig-zag of stub
+    lines: `--host` / `\\` / `127.0.0.1` / `\\`). Continuations stay valid
+    shell, so the box is still copy-paste runnable; only argv[0] (the binary)
+    leads the first line, and a bare non-flag token keeps its own line.
     """
     prefix = []
     if cfg is not None:
@@ -567,8 +573,33 @@ def render_command(argv: list, cfg: dict | None = None) -> str:
         if env:
             prefix.extend(f"{k}={v}" for k, v in env.items())
         prefix.extend(exec_wrapper(cfg))
-    body = " \\\n              ".join(shlex.quote(str(t)) for t in argv)
-    return (" ".join(shlex.quote(str(p)) for p in prefix) + " " if prefix else "") + body
+
+    def is_flag(t: str) -> bool:
+        # `-1` / `-0.5` are VALUES (llama.cpp takes them after a required-argument
+        # flag); matching a leading dash alone would split them onto their own line.
+        return t.startswith("-") and not re.match(r"^-\d", t)
+
+    toks = [shlex.quote(str(t)) for t in argv]
+    lines: list[str] = []
+    first = " ".join(prefix + ([toks[0]] if toks else []))
+    if toks:
+        lines.append(first)
+    elif prefix:
+        lines.append(first)
+    i = 1
+    while i < len(toks):
+        tok = toks[i]
+        if is_flag(tok):
+            # `-f value` / `--flag value` on one line; `--flag=v` is already one
+            if i + 1 < len(toks) and not is_flag(toks[i + 1]):
+                lines.append(f"{tok} {toks[i + 1]}")
+                i += 2
+                continue
+            lines.append(tok)
+        else:
+            lines.append(tok)
+        i += 1
+    return " \\\n  ".join(lines)
 
 
 # ── Pydantic model ──────────────────────────────────────────────
