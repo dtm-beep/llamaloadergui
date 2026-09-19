@@ -63,11 +63,25 @@
   .settings-panel { flex: 1; min-width: 0; overflow-y: auto; padding-right: 8px; height: 100%; }
 
   /* Right Panel (Pinned Command Preview & Logs) */
-  .logs-panel { width: 420px; flex-shrink: 0; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  .logs-panel { width: 560px; min-width: 360px; max-width: 92vw; flex-shrink: 0; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  /* Drag handle between settings and the log rail: the llama-server banner
+     ("wrap: ...", full launch params) is unreadable at the old fixed 420px,
+     so the rail is now resizable; width persists across reloads.
+     It must be FINDABLE at a glance, so it is a visible amber pill with grip
+     dots — deliberately not the panel background — brightening on hover/drag. */
+  .rail-resizer {
+    flex: 0 0 8px; align-self: stretch; cursor: col-resize; border-radius: 4px;
+    background-color: var(--yellow, #d8b25e);
+    background-image: repeating-linear-gradient(180deg, transparent 0 6px, rgba(0,0,0,.55) 6px 9px);
+    background-position: center; background-size: 2px 62%; background-repeat: no-repeat;
+    opacity: .8; transition: opacity .12s, filter .12s;
+  }
+  .rail-resizer:hover, .rail-resizer.dragging { opacity: 1; filter: brightness(1.25); }
+  body.no-logs .rail-resizer { display: none; }
   .logs-panel .section { flex: 0 0 auto; margin-bottom: 12px; }
   .logs-panel .logs-header { flex: 0 0 auto; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
   .logs-panel .logs-header h3 { font-size: 12px; color: var(--text-dim); }
-  .logs-panel .logs-box { flex: 1; min-height: 0; overflow-y: auto; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 10px; font-family: var(--mono); font-size: 11px; line-height: 1.6; color: var(--text-dim); white-space: pre-wrap; word-break: break-all; }
+  .logs-panel .logs-box { flex: 1; min-height: 0; overflow-y: auto; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 10px; font-family: var(--mono); font-size: 11px; line-height: 1.6; color: var(--text-dim); white-space: pre-wrap; overflow-wrap: anywhere; }
 
   /* ── Sections ── */
   /* overflow must stay visible or [data-tip] tooltips get clipped at section edges;
@@ -103,7 +117,7 @@
   .btn-ghost:hover { color: var(--text); border-color: var(--text-mut); }
 
   /* ── Command preview ── */
-  .command-box { background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px; font-family: var(--mono); font-size: 11.5px; color: var(--cyan); white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow-y: auto; line-height: 1.6; }
+  .command-box { background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px; font-family: var(--mono); font-size: 11.5px; color: var(--cyan); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; line-height: 1.6; }
 
   /* ── Toast ── */
   .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; border-radius: var(--radius); font-size: 12px; font-family: var(--sans); font-weight: 500; z-index: 999; animation: slideIn .2s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
@@ -1183,6 +1197,9 @@
 
     </div> <!-- End of settings-panel -->
 
+    <!-- Drag handle: resize the log rail (see .rail-resizer) -->
+    <div class="rail-resizer" id="railResizer" title="Drag to resize the log panel"></div>
+
     <!-- Right Panel: Command Preview + Logs -->
     <div class="logs-panel" id="logsPanel">
       <div class="section">
@@ -1214,6 +1231,32 @@
 let profiles = {};
 
 // ── Init ──
+// ── Resizable log rail ── pointer drag on the divider sets --width; clamped
+// and stored so the width you left is the width you get back.
+(function () {
+  const panel = document.getElementById('logsPanel');
+  const grip = document.getElementById('railResizer');
+  if (!panel || !grip) return;
+  const KEY = 'llg_rail_w';
+  const clamp = (w) => Math.round(Math.min(Math.max(w, 360), Math.max(360, window.innerWidth - 480)));
+  const saved = parseInt(localStorage.getItem(KEY) || '', 10);
+  if (saved) panel.style.width = clamp(saved) + 'px';
+  grip.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    grip.classList.add('dragging');
+    grip.setPointerCapture(e.pointerId);
+    const move = (ev) => { panel.style.width = clamp(window.innerWidth - ev.clientX - 20) + 'px'; };
+    const up = (ev) => {
+      grip.classList.remove('dragging');
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      localStorage.setItem(KEY, panel.style.width);
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+  });
+})();
+
 async function init() {
   try {
     const r = await fetch('/api/models');
