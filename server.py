@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
-"""Llama Loader GUI — scan models, save profiles, launch llama-server."""
+# SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep
+"""Llama Loader GUI  -  scan models, save profiles, launch llama-server."""
 
 import asyncio
 import json
@@ -82,7 +82,7 @@ def scan_models() -> list[dict]:
 # ── llama-server binary discovery ────────────────────────────────
 # Builds come and go (git worktrees, forks, -dspark, build-mtp...); a hardcoded
 # dropdown rots immediately. Scan for real binaries instead. We never execute a
-# llama-server binary to identify it (no --version probe) — metadata only.
+# llama-server binary to identify it (no --version probe)  -  metadata only.
 BINARY_SCAN_ROOTS = [Path.home(), Path("/mnt/games")]
 
 
@@ -102,7 +102,7 @@ def scan_binaries() -> list[dict]:
                     continue
                 if key in found:
                     continue
-                # label: "llamaDTM / build-mtp" — repo name + build dir
+                # label: "llamaDTM / build-mtp"  -  repo name + build dir
                 repo = path.relative_to(root).parts[0]
                 build = path.parent.parent.name
                 kind = "dev"
@@ -149,7 +149,7 @@ def _add(tokens: list, flag: str, value=None):
     if value is not None:
         tokens.extend([flag, str(value)])
     else:
-        # Bare boolean flag (valueless) — always emit the flag itself
+        # Bare boolean flag (valueless)  -  always emit the flag itself
         tokens.append(flag)
 
 
@@ -157,7 +157,7 @@ def launch_env(cfg: dict):
     """Extra environment variables for the child process ('K=V K=V' / JSON).
 
     Env assignments and wrappers (taskset, nice) are how the server gets
-    started, not llama-server flags — an importer that drops them silently
+    started, not llama-server flags  -  an importer that drops them silently
     changes behaviour (e.g. GGML_CUDA_NO_PINNED, LLAMA_ATTN_ROT_DISABLE).
     """
     raw = cfg.get("env") or ""
@@ -722,7 +722,7 @@ class Config(BaseModel):
     # (e.g. 'LLAMA_ATTN_ROT_DISABLE=1 GGML_CUDA_NO_PINNED=1' / 'taskset -c 0-11').
     env: str = ""
     exec_prefix: str = ""
-    # Remote (SSH) target — empty host = launch on this machine.
+    # Remote (SSH) target  -  empty host = launch on this machine.
     remote_host: str = ""
     remote_ssh_port: int = 22
     remote_bin: str = ""
@@ -1067,14 +1067,14 @@ def _rq(path: str) -> str:
     if path.startswith("~/"):
         return "~" + shlex.quote(path[1:])
     if path.startswith("~") and len(path) > 1:
-        # ~user/rest — expand user, quote the rest
+        # ~user/rest  -  expand user, quote the rest
         rest = path[1:].split("/", 1)
         return "~" + rest[0] + (shlex.quote("/" + rest[1]) if len(rest) > 1 else "")
     return shlex.quote(path)
 
 
 def _remote_files(t: dict, listen_port: int) -> tuple[str, str]:
-    """(log, pidfile) on the target — keyed by llama-server LISTEN port, so two
+    """(log, pidfile) on the target  -  keyed by llama-server LISTEN port, so two
     servers on one target (8080/8081) do not fight over one pidfile."""
     p = int(listen_port)
     return (f"{REMOTE_DIR}/llama-server-{p}.log", f"{REMOTE_DIR}/llama-server-{p}.pid")
@@ -1104,9 +1104,9 @@ def _remote_launch_script(argv: list, t: dict, env: dict | None, listen_port: in
 
 # Status is decided ON THE TARGET (a TCP probe from this machine would test
 # this machine's own port, or miss a server bound to the target's loopback).
-#  RUNNING <pid> — pidfile process alive (ours, or a previous run of this GUI)
-#  BUSY        — nothing in our pidfile, but something listens on the port there
-#  NOT_RUNNING — nothing
+#  RUNNING <pid>  -  pidfile process alive (ours, or a previous run of this GUI)
+#  BUSY         -  nothing in our pidfile, but something listens on the port there
+#  NOT_RUNNING  -  nothing
 # Pidfile-reuse guard: a stale pid file can point at a recycled PID belonging
 # to something else entirely (sshd, a database, even a hand-started
 # llama-server). Both status and stop check the process name against the
@@ -1275,11 +1275,11 @@ async def api_ssh_test(payload: dict):
         return JSONResponse({"ok": True, "host": t["host"], "uname": lines[1] if len(lines) > 1 else ""})
     hint = ""
     if "Permission denied" in err or "Permission denied" in out:
-        hint = " — key auth failed: add this machine's key to the target (ssh-copy-id) and/or load it in the agent"
+        hint = "  -  key auth failed: add this machine's key to the target (ssh-copy-id) and/or load it in the agent"
     elif "timed out" in err:
-        hint = " — host unreachable or sshd not answering"
+        hint = "  -  host unreachable or sshd not answering"
     elif "Host key verification" in err:
-        hint = " — unknown host key (the GUI accepts new ones automatically; a changed key must be removed from ~/.ssh/known_hosts by hand)"
+        hint = "  -  unknown host key (the GUI accepts new ones automatically; a changed key must be removed from ~/.ssh/known_hosts by hand)"
     return JSONResponse({"ok": False, "error": (err or out or "ssh failed").strip()[:300] + hint}, status_code=400)
 
 
@@ -1317,14 +1317,14 @@ async def api_launch(cfg: Config):
         if not shutil.which("ssh"):
             return JSONResponse({"error": "ssh client not found on PATH"}, status_code=400)
         # A detached remote server leaves no local child to poll, so the usual
-        # "already running" guard cannot see it — ask the target instead.
+        # "already running" guard cannot see it  -  ask the target instead.
         state, prior = await _remote_status(t, d["port"])
         if state == "running":
             return JSONResponse({"error": f"Server already running on {t['host']} "
-                                          f"(PID {prior}) — Stop it first"}, status_code=409)
+                                          f"(PID {prior})  -  Stop it first"}, status_code=409)
         if state == "busy":
             return JSONResponse({"error": f"Port {d['port']} is already in use on {t['host']} "
-                                          f"(started outside this GUI) — free it or pick another port"},
+                                          f"(started outside this GUI)  -  free it or pick another port"},
                                 status_code=409)
         argv = [t["bin"], *argv[1:]]
         script = _remote_launch_script(argv, t, launch_env(d), d["port"])
@@ -1339,7 +1339,7 @@ async def api_launch(cfg: Config):
 
     wrapper = exec_wrapper(d)
 
-    # Sanity checks — fail with a clear 400 instead of a llama-server that
+    # Sanity checks  -  fail with a clear 400 instead of a llama-server that
     # dies one second after launch (or a Popen FileNotFoundError 500).
     if wrapper and not shutil.which(wrapper[0]):
         return JSONResponse({"error": f"Wrapper command not found on PATH: {wrapper[0]}"}, status_code=400)
@@ -1358,7 +1358,7 @@ async def api_launch(cfg: Config):
             return JSONResponse({"error": f"Model file not found: {model} (or set --hf-repo/--model-url)"}, status_code=400)
     port = int(d.get("port") or 8080)
     if await _port_in_use(port, d.get("host") or "127.0.0.1"):
-        return JSONResponse({"error": f"Port {port} is already in use — a server (possibly started outside this GUI) is listening. Stop it before launching from here."}, status_code=409)
+        return JSONResponse({"error": f"Port {port} is already in use  -  a server (possibly started outside this GUI) is listening. Stop it before launching from here."}, status_code=409)
 
     # Close a stale log handle from a previously crashed child.
     if running_server.get("log"):
@@ -1407,9 +1407,9 @@ async def api_stop(request: Request):
         if out in ("NOPID", "GONE"):
             return JSONResponse({"status": "not running", "remote": t["host"]})
         if out.startswith("REFUSED"):
-            # Pidfile pointed at a recycled PID — never kill it; tell the user.
+            # Pidfile pointed at a recycled PID  -  never kill it; tell the user.
             return JSONResponse({"error": f"stale pid file on target ({out}); "
-                                          f"left untouched — remove ~/.llamaloader/llama-server-{port}.pid there"},
+                                          f"left untouched  -  remove ~/.llamaloader/llama-server-{port}.pid there"},
                                 status_code=400)
         return JSONResponse({"status": "not running", "remote": t["host"], "detail": (err or out).strip()[:200]})
     if running_server["proc"] and running_server["proc"].poll() is None:
@@ -1459,7 +1459,7 @@ async def api_logs(limit: int = 50, remote_host: str = "", remote_ssh_port: int 
                    port: int = 8080, remote_bin: str = ""):
     limit = max(1, min(int(limit), 1000))
     if remote_host:
-        # Remote log lives on the target — tail it there and ship the text.
+        # Remote log lives on the target  -  tail it there and ship the text.
         try:
             t = _remote_target({"remote_host": remote_host, "remote_ssh_port": remote_ssh_port,
                                 "remote_bin": remote_bin})

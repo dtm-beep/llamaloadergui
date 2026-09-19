@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<!-- SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep -->
+<!-- SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -68,7 +68,7 @@
      ("wrap: ...", full launch params) is unreadable at the old fixed 420px,
      so the rail is now resizable; width persists across reloads.
      It must be FINDABLE at a glance, so it is a visible amber pill with grip
-     dots — deliberately not the panel background — brightening on hover/drag. */
+     dots  -  deliberately not the panel background  -  brightening on hover/drag. */
   .rail-resizer {
     flex: 0 0 8px; align-self: stretch; cursor: col-resize; border-radius: 4px;
     background-color: var(--yellow, #d8b25e);
@@ -119,7 +119,7 @@
   /* ── Command preview ──
      The rail is narrow and the model paths are long, so wrapping must happen
      at '/' and '=' (renderCommandPreview inserts <wbr>, which adds no character
-     to a copy) — never mid-word. Flags/values/continuations are coloured apart
+     to a copy)  -  never mid-word. Flags/values/continuations are coloured apart
      so the eye scans pairs instead of a grey wall, and the box grows into the
      empty rail height instead of stopping at a fixed 240px. */
   .command-box { background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px; font-family: var(--mono); font-size: 11.5px; color: var(--cyan); white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; max-height: min(46vh, 560px); min-height: 88px; overflow-y: auto; overflow-x: hidden; line-height: 1.65; }
@@ -184,7 +184,7 @@
   .profile-search input { width: 100%; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 6px; padding: 6px 9px; color: var(--text); font-family: var(--sans); font-size: 12px; outline: none; }
   .profile-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
 
-  /* ── Pinned launch bar (bottom of main column — always visible, never scrolls away) ── */
+  /* ── Pinned launch bar (bottom of main column  -  always visible, never scrolls away) ── */
   .launch-bar { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: var(--surface); border-top: 1px solid var(--border-soft); flex-shrink: 0; }
   .launch-bar .cmd-oneline { font-family: var(--mono); font-size: 11px; color: var(--text-mut); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dirty-pill { display: none; align-items: center; gap: 6px; font-size: 11.5px; color: var(--orange); background: rgba(240,163,94,.10); padding: 5px 10px; border-radius: 20px; flex-shrink: 0; }
@@ -226,7 +226,7 @@
     <h1>Llama Loader</h1>
     <div class="top-actions">
       <span class="kbd-hint"><kbd>Ctrl+↵</kbd>launch<kbd>Ctrl+S</kbd>save<kbd>Ctrl+L</kbd>logs</span>
-      <button class="btn btn-ghost btn-sm" id="logsToggle" onclick="toggleLogs()" data-tip="Toggle the log rail. With the rail hidden the form flows in two columns — better use of a 16:9 screen.">Hide logs</button>
+      <button class="btn btn-ghost btn-sm" id="logsToggle" onclick="toggleLogs()" data-tip="Toggle the log rail. With the rail hidden the form flows in two columns  -  better use of a 16:9 screen.">Hide logs</button>
     </div>
   </div>
 
@@ -271,7 +271,7 @@
           </div>
           <div class="model-select-wrap field">
             <label>GGUF File</label>
-            <select id="model" onchange="updateCommand()" title="Path to the GGUF model file — scanned from ~/.lmstudio/models"></select>
+            <select id="model" onchange="updateCommand()" title="Path to the GGUF model file  -  scanned from ~/.lmstudio/models"></select>
             <span id="modelStatus" style="font-size:10px;color:var(--border);margin-top:4px;display:block;">Loading...</span>
           </div>
           <div class="field">
@@ -405,7 +405,7 @@
         </div>
       </div>
 
-      <!-- Remote (SSH) — headless targets -->
+      <!-- Remote (SSH)  -  headless targets -->
       <div class="section">
         <div class="section-header" onclick="toggleSection(this)">Remote / SSH <span>▾</span></div>
         <div class="section-body">
@@ -423,7 +423,7 @@
           </div>
           <div class="field">
             <label title="Working directory on the target">Remote workdir</label>
-            <input type="text" id="remote_workdir" placeholder="optional — cd here first" title="Optional directory to cd into on the target before launching (absolute or ~/). Relative model paths resolve against it." onchange="updateCommand()"/>
+            <input type="text" id="remote_workdir" placeholder="optional  -  cd here first" title="Optional directory to cd into on the target before launching (absolute or ~/). Relative model paths resolve against it." onchange="updateCommand()"/>
           </div>
           <div class="field">
             <button class="btn btn-sm" style="background:var(--surface2);color:var(--text);" onclick="testRemote()" data-tip="Check that SSH key auth to the target works">Test connection</button>
@@ -505,7 +505,7 @@
         <div class="section-body">
           <div class="field">
             <label title="Max layers to store in VRAM">GPU Layers</label>
-            <input type="number" id="ngl" value="-1" title="-1 = auto (llama.cpp default — the flag is omitted). 0 = CPU only, N = exactly N layers offloaded, all = every layer." onchange="updateCommand()"/>
+            <input type="number" id="ngl" value="-1" title="-1 = auto (llama.cpp default  -  the flag is omitted). 0 = CPU only, N = exactly N layers offloaded, all = every layer." onchange="updateCommand()"/>
           </div>
           <div class="field">
             <label title="Comma-separated device list">Device</label>
@@ -1078,7 +1078,7 @@
           </div>
           <div class="field">
             <label title="Reasoning parser/format (fork-dependent, e.g. deepseek-legacy, deepseek, glm45, phi4, mistral-eager)">Reason Format</label>
-            <input type="text" id="reasoning_format" placeholder="deepseek-legacy" title="--reasoning-format: which parser extracts the reasoning trace. Names differ per fork — leave empty for server default." onchange="updateCommand()"/>
+            <input type="text" id="reasoning_format" placeholder="deepseek-legacy" title="--reasoning-format: which parser extracts the reasoning trace. Names differ per fork  -  leave empty for server default." onchange="updateCommand()"/>
           </div>
           <div class="field" style="grid-column:1/-1;">
             <label title="Raw JSON passed to --chat-template-kwargs. Any key round-trips (reasoning_effort, preserve_thinking, ...)">Template Kw</label>
@@ -1416,7 +1416,7 @@ async function loadBinaries() {
       const o = document.createElement('option');
       o.value = b.path;
       const when = b.mtime ? new Date(b.mtime * 1000).toISOString().slice(0, 10) : '?';
-      o.textContent = b.label + (kind === 'dev' ? ' · built ' + when : '') + (b.is_default ? ' — default' : '');
+      o.textContent = b.label + (kind === 'dev' ? ' · built ' + when : '') + (b.is_default ? '  -  default' : '');
       o.title = b.path;
       og.appendChild(o);
     });
@@ -1425,7 +1425,7 @@ async function loadBinaries() {
   if (!bins.length) {
     const o = document.createElement('option');
     o.value = (window.__HOME || '') + '/llama.cpp/build/bin/llama-server';
-    o.textContent = 'no builds found — set path below';
+    o.textContent = 'no builds found  -  set path below';
     sel.appendChild(o);
   }
   if (prev && Array.from(sel.options).some(o => o.value === prev)) sel.value = prev;
@@ -1443,7 +1443,7 @@ function getCfg() {
     'cors_credentials','metrics','cache_prompt','models_autoload'];
   // NOTE: any new checkbox MUST be listed above. A checkbox left out is read as
   // el.value, and a checkbox's .value is the literal "on" whether or not it is
-  // checked — so the flag gets emitted unconditionally and the checkbox becomes
+  // checked  -  so the flag gets emitted unconditionally and the checkbox becomes
   // decorative (this is exactly how --kv-unified and --verbose used to leak into
   // every launch).
   const intFields = ['port','pipeline','ngl','parallel','threads','threads_batch','prio','poll','prio_batch',
@@ -1509,7 +1509,7 @@ function setCfg(cfg) {
       // Path-valued dropdowns are populated by a scan, so an imported/saved path
       // may not be in the list (build or model added after the last scan, path
       // outside the scanned roots). Without an option the <select> silently keeps
-      // whatever was selected before — launching a different binary/model than the
+      // whatever was selected before  -  launching a different binary/model than the
       // one the user imported. Offer the path instead.
       if ((k === 'llama_server' || k === 'model') && v) {
         const o = document.createElement('option');
@@ -1555,10 +1555,10 @@ function updateCommand() {
 // ── Command preview: token-aware, break-at-separator rendering ──
 // The rail can be ~360px wide and model paths run 130+ chars, so plain
 // pre-wrap shreds them mid-word (the "every line broken" complaint). Break
-// points come from <wbr> after '/', '=' and ':' — invisible, and crucially
+// points come from <wbr> after '/', '=' and ':'  -  invisible, and crucially
 // they add NO character, so selecting/copying still yields the exact command.
 // Flags are accent-coloured, values plain, continuations muted: pairs read
-// as pairs. Text nodes only (never innerHTML) — a pasted path can hold <>.
+// as pairs. Text nodes only (never innerHTML)  -  a pasted path can hold <>.
 function renderCommandPreview(el, cmd) {
   el.textContent = '';
   const lines = String(cmd).split('\n');
@@ -1587,7 +1587,7 @@ function renderCommandPreview(el, cmd) {
 }
 
 // Copy the command exactly as the server would run it (textContent: no <wbr>,
-// no injected characters). Clipboard API needs a secure context — the GUI is
+// no injected characters). Clipboard API needs a secure context  -  the GUI is
 // served on http://127.0.0.1, which counts as one.
 async function copyCommand(ev) {
   ev.stopPropagation();  // the header click toggles the section
@@ -1638,7 +1638,7 @@ async function loadProfile(name) {
   document.getElementById('profileName').value = name;
   // Merge over the defaults: a profile saved before a field existed (e.g. the
   // SSH target fields) must not inherit whatever the form happens to hold from
-  // the previous action — that silently redirects launches to a remote host.
+  // the previous action  -  that silently redirects launches to a remote host.
   setCfg(Object.assign({}, serverDefaults(), cfg));
 }
 
@@ -1810,7 +1810,7 @@ async function updateStatus() {
     launchBtn.style.display = 'none';
     stopBtn.style.display = '';
   } else if (data.status === 'external') {
-    // A llama-server owns the port but was NOT started by this GUI — show it,
+    // A llama-server owns the port but was NOT started by this GUI  -  show it,
     // keep Launch available (it will be refused with a clear message), hide Stop.
     badge.className = 'status-badge external';
     text.textContent = 'External server on :' + port + where + ' (not GUI-owned)';
@@ -1833,7 +1833,7 @@ async function fetchLogs() {
   const r = await fetch('/api/logs?limit=100&port=' + lp + (rh ? '&remote_host=' + encodeURIComponent(rh) + '&remote_ssh_port=' + rp + '&remote_bin=' + encodeURIComponent(rb) : ''));
     const data = await r.json();
     document.getElementById('logsBox').textContent = data.lines.join('\n') || 'No logs yet.';
-  } catch (e) { /* GUI unreachable — keep last log box contents */ }
+  } catch (e) { /* GUI unreachable  -  keep last log box contents */ }
 }
 
 // ── UI helpers ──
@@ -1846,7 +1846,7 @@ function toggleSection(hdr) {
 
 // Declutter: advanced/arcane sections start collapsed so the first screen
 // shows the essential workflow (model, network, context, sampling, command,
-// launch). No parameters are removed — each is one click away.
+// launch). No parameters are removed  -  each is one click away.
 function collapseAdvanced() {
   const collapse = [
     'CPU', 'Model Loading', 'KV Cache', 'RoPE Scaling', 'LoRA & Control Vectors',
@@ -2016,13 +2016,13 @@ function parseLlamaCommand(raw) {
 
   // 1) Comments, bash-style: quote-aware, on PHYSICAL lines. A '#' outside
   //    quotes at a WORD START (start of line, or after whitespace) opens a
-  //    comment running to that line's end — this is how users toggle flags
+  //    comment running to that line's end  -  this is how users toggle flags
   //    off ("# -ngl 99"). The old whole-line filter (^\s*#) missed trailing
   //    comments, so "--temp 0.8 # -ngl 99" APPLIED the commented-out -ngl
   //    and left "#" as a junk token; a comment ending in '\' was joined into
   //    the previous line first and its flags leaked in too. Rules here match
   //    bash: '#' mid-word (~/mod#1.gguf) or in quotes is literal, '\#' is an
-  //    escape, and inside a comment a backslash-newline does NOT continue —
+  //    escape, and inside a comment a backslash-newline does NOT continue  - 
   //    so stripping BEFORE continuation-flattening kills the whole comment.
   const stripComments = (s) => {
     let out = '', quote = '', wordStart = true;
@@ -2070,7 +2070,7 @@ function parseLlamaCommand(raw) {
   //    PowerShell "PS C:\>") made the PROMPT GLYPH the binary: argv[0] became
   //    "❯", the env assignments and taskset wrapper fell into the flag loop
   //    instead of the Env/Wrapper fields, and a launch tried to exec "❯".
-  //    Leading tokens only — nothing after the binary can be a prompt.
+  //    Leading tokens only  -  nothing after the binary can be a prompt.
   const isPrompt = (s) =>
     /^[\$%>›»❯➜→]+$/.test(s) ||                       // ❯  $  %  >  >>
     /^[^\s]*[@:][^\s]*[#$%>]$/.test(s);              // user@host:~$   C:\>
@@ -2118,7 +2118,7 @@ function parseLlamaCommand(raw) {
 
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
-    // The binary is the first non-flag token before any flag shows up — it can
+    // The binary is the first non-flag token before any flag shows up  -  it can
     // sit after env assignments/wrappers, not only at index 0.
     if (!tok.startsWith('-') && !sawFlag && !server) { server = tok; serverIdx = i; continue; }
     if (tok.startsWith('-')) sawFlag = true;
@@ -2185,7 +2185,7 @@ function parseLlamaCommand(raw) {
     else if (floatFields.includes(k)) { const n = parseFloat(cfg[k]); if (!isNaN(n)) cfg[k] = n; }
   });
   // rawArgv: the ORIGINAL token list after the binary (quotes already resolved
-  // by the tokenizer). Launch/preview use it verbatim until a field is edited —
+  // by the tokenizer). Launch/preview use it verbatim until a field is edited  - 
   // rebuilding from the form instead adds flags the pasted command never had.
   const rawArgv = tokens.slice(serverIdx < 0 ? 0 : serverIdx + 1);
   return { cfg, unknown, server, rawArgv };
@@ -2245,7 +2245,7 @@ function parseCliCommand() {
   const full = Object.assign({}, serverDefaults(), parsed.cfg);
   // Apply the binary the imported command actually used (it used to be parsed
   // and then thrown away, so the launch silently kept whatever the dropdown
-  // happened to show — i.e. possibly a different llama.cpp build).
+  // happened to show  -  i.e. possibly a different llama.cpp build).
   if (parsed.server) {
     let s = parsed.server.trim();
     if (s === '~' || s.startsWith('~/')) s = (window.__HOME || '/home/user') + s.slice(1);
@@ -2283,7 +2283,7 @@ function setLogsVisible(on) {
 }
 function toggleLogs() { setLogsVisible(document.body.classList.contains('no-logs')); }
 
-// ── Keyboard shortcuts (desktop-only app — no touch compromise needed) ──
+// ── Keyboard shortcuts (desktop-only app  -  no touch compromise needed) ──
 document.addEventListener('keydown', e => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveProfile(); }
@@ -2295,8 +2295,8 @@ document.addEventListener('keydown', e => {
 // ── Field tooltips: the llama.cpp flag behind every GUI field (names taken
 // from the parse-core LONG/SHORT tables, i.e. exactly what round-trips).
 const FLAG = {
-  llama_server:'(not a flag — binary path)', model:'--model / -m', hf_repo:'--hf-repo / -hfr', hf_file:'--hf-file / -hff',
-  model_url:'--model-url / -mu', env:'(not a flag — process environment)', exec_prefix:'(not a flag — command wrapper)',
+  llama_server:'(not a flag  -  binary path)', model:'--model / -m', hf_repo:'--hf-repo / -hfr', hf_file:'--hf-file / -hff',
+  model_url:'--model-url / -mu', env:'(not a flag  -  process environment)', exec_prefix:'(not a flag  -  command wrapper)',
   host:'--host', port:'--port', pipeline:'pipeline stages (server arg)', parallel:'--parallel / -np', alias:'--alias / -a',
   kv_unified:'--kv-unified / -kvu',
   api_key:'--api-key', api_key_file:'--api-key-file', api_prefix:'--api-prefix',

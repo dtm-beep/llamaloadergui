@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
-"""Markup balance test for templates/gui.html — no dependencies.
+# SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep
+"""Markup balance test for templates/gui.html  -  no dependencies.
 
 Why this exists: commit 0aef54a added the "Remote / SSH" section by *replacing*
 the CPU section's opening `<div class="section">` + header lines instead of
@@ -8,7 +8,7 @@ inserting before them. One missing opening tag puts every later `</div>` one
 level too high, so .settings-panel / .content / .main close early and the
 pinned launch bar (whose one-line command preview is a long unbroken
 "sentence") becomes a flex child of <body> and squishes every other box.
-FastAPI renders the template happily either way — only the browser notices,
+FastAPI renders the template happily either way  -  only the browser notices,
 which is why this check exists: catch it in CI, not on screen.
 
     .venv/bin/python tests/test_markup.py
@@ -70,7 +70,7 @@ class Checker(HTMLParser):
             open_tag, ol, oc = self.stack[-1]
             self.errors.append(
                 f"</{tag}> at line {line} closes {open_tag} opened at line {ol} "
-                f"(implicit close — nesting is off by one)")
+                f"(implicit close  -  nesting is off by one)")
             # unwind so the rest of the report stays meaningful
             names = [t for t, *_ in self.stack]
             if tag in names:
@@ -104,7 +104,7 @@ def main():
     check("every section has a body", bodies == sections,
           f"{sections} .section vs {bodies} .section-body")
 
-    # Every interactive control the backend reads must be unique — a dropped
+    # Every interactive control the backend reads must be unique  -  a dropped
     # wrapper historically duplicated or orphaned fields.
     ids = [line for line in _ids(src)]
     dupes = {i for i in ids if ids.count(i) > 1}

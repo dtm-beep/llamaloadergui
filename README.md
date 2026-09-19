@@ -239,7 +239,7 @@ a single FastAPI module (`server.py`).
 GPL-3.0-or-later, see [LICENSE](LICENSE).
 
 ```text
-Copyright (c) 2026 DTM-beep — https://github.com/DTM-beep
+Copyright (c) 2026 DTM-beep  -  https://github.com/DTM-beep
 SPDX-License-Identifier: GPL-3.0-or-later
 ```
 

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
-"""Preview-renderer tests for renderCommandPreview() — needs node, no network.
+# SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep
+"""Preview-renderer tests for renderCommandPreview()  -  needs node, no network.
 
 Why this exists: the Command Preview box is narrow (the log rail can be 360px)
 and model paths run 130+ chars, so plain `pre-wrap` shredded every long token
-mid-word — "the lines are all broken, make use of the empty space". The fix
+mid-word  -  "the lines are all broken, make use of the empty space". The fix
 breaks at '/' , '=' and ':' via <wbr> elements. <wbr> is the whole point: it is
 an invisible *break opportunity* that adds **no character**, so selecting or
 clicking Copy still yields the byte-exact command. That fidelity property is

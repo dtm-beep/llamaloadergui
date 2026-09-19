@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
-"""Parser tests for the paste-a-command import path — needs node, no network.
+# SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep
+"""Parser tests for the paste-a-command import path  -  needs node, no network.
 
 Why this exists: pasting a command straight from a terminal (prompt glyph and
-all — "❯ llama-server -m …" from fish / powerlevel10k / oh-my-posh, "$ …" from
+all  -  "❯ llama-server -m …" from fish / powerlevel10k / oh-my-posh, "$ …" from
 bash, "PS C:\\>" from PowerShell) used to make the *prompt* the binary: the
 first non-flag token wins, so argv[0] became "❯", the env assignments and the
 taskset wrapper fell into the flag loop instead of the Env/Wrapper fields, and
@@ -163,7 +163,7 @@ def main():
     check("commented flag same line: -ngl NOT applied", res["commented flag same line"]["ngl"] is None, res["commented flag same line"]["raw"])
     back = res["commented line w backslash"]
     check("commented line w backslash: --temp NOT applied", back["temp"] is None, back["raw"])
-    # the commented --host died with its line; only the LIVE --host survives —
+    # the commented --host died with its line; only the LIVE --host survives  - 
     # exactly one --host in argv is the proof the commented one did not leak
     check("commented line w backslash: exactly one (live) --host", back["raw"].count("--host") == 1 and back["host"] == "0.0.0.0", back["raw"])
     # literal '#' must NOT open a comment where bash keeps it literal

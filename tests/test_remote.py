@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
-"""Direct tests for the remote (SSH) code paths — no ssh, no network.
+# SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep
+"""Direct tests for the remote (SSH) code paths  -  no ssh, no network.
 
 server._run_ssh is replaced with an in-process emulator of the target machine
 (pidfile, /proc/<pid>/comm identity check, port-busy probe). Endpoints are
@@ -23,7 +23,7 @@ FAIL = 0
 def check(name, cond, detail=""):
     global FAIL
     msg = "  ok   " if cond else "  FAIL "
-    print(msg + name + ((" — " + str(detail)[:220]) if detail and not cond else ""))
+    print(msg + name + (("  -  " + str(detail)[:220]) if detail and not cond else ""))
     if not cond:
         FAIL += 1
 
@@ -68,7 +68,7 @@ class FakeTarget:
         if "llama-server-" in remote_cmd and "tail" in remote_cmd:
             return 0, "line one\nline two\n", ""
         if "/proc/$p/comm" in remote_cmd and "kill \"$p\"" not in remote_cmd:
-            # status command — must honour the same identity guard as the real
+            # status command  -  must honour the same identity guard as the real
             # shell: alive AND comm matches the expected prefix.
             port = int(re.search(r"llama-server-(\d+)\.pid", remote_cmd).group(1))
             expect_txt = server._remote_expect(t)   # same rule the app applies

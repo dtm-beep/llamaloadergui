@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<!-- SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep -->
+<!-- SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep -->
 # Security Policy
 
 This project is a **process launcher with root-of-trust over your own machine(s)**.

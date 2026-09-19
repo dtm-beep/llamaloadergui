@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
-"""Preview-formatting tests for render_command() — display only, no network.
+# SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep
+"""Preview-formatting tests for render_command()  -  display only, no network.
 
 Why this exists: the preview emitted **one argv token per line**, and the log
 rail is narrow. The result read as a zig-zag of stub lines ("--host" / "\" /
@@ -10,7 +10,7 @@ its value on ONE line, keeps the continuation valid shell, and drops the old
 
 Copy fidelity is the property that matters: the box is the one place a user
 reads the command from, so `bash` must see exactly the argv it claims. Test
-that with bash's own rule — backslash-newline is a *continuation*, which Python
+that with bash's own rule  -  backslash-newline is a *continuation*, which Python
 shlex does NOT implement (it keeps "\\␊" as a literal newline), so the string
 is flattened the way a shell would before round-tripping.
 
@@ -74,7 +74,7 @@ def main():
     check("long model path stays whole on one source line",
           any(MODEL in l for l in cmd.split("\n")), [l for l in cmd.split("\n") if ".gguf" in l])
 
-    # env + wrapper belong to the preview — the copy must not lie
+    # env + wrapper belong to the preview  -  the copy must not lie
     cfg = {"env": "GGML_CUDA_NO_PINNED=1", "exec_prefix": "taskset -c 0-11"}
     both = render_command([BIN, "-m", MODEL], cfg)
     check("env assignment kept", "GGML_CUDA_NO_PINNED=1" in both, both)

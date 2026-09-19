@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# SPDX-FileCopyrightText: 2026 DTM-beep — https://github.com/DTM-beep
+# SPDX-FileCopyrightText: 2026 DTM-beep  -  https://github.com/DTM-beep
 """Tests for the per-build flag scan and the 2026-09-19 field sync.
 
 Two halves:
