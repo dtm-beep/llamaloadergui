@@ -1744,11 +1744,41 @@ function parseLlamaCommand(raw) {
     'repeat_penalty','presence_penalty','frequency_penalty','dry_multiplier','dry_base','dry_penalty_last_n',
     'adaptive_target','adaptive_decay','dynatemp_range','dynatemp_exp','mirostat_lr','mirostat_ent'];
 
-  // 1) strip line continuations, 2) drop full-line comments, 3) join
-  const cleaned = String(raw)
+  // 1) Comments, bash-style: quote-aware, on PHYSICAL lines. A '#' outside
+  //    quotes at a WORD START (start of line, or after whitespace) opens a
+  //    comment running to that line's end — this is how users toggle flags
+  //    off ("# -ngl 99"). The old whole-line filter (^\s*#) missed trailing
+  //    comments, so "--temp 0.8 # -ngl 99" APPLIED the commented-out -ngl
+  //    and left "#" as a junk token; a comment ending in '\' was joined into
+  //    the previous line first and its flags leaked in too. Rules here match
+  //    bash: '#' mid-word (~/mod#1.gguf) or in quotes is literal, '\#' is an
+  //    escape, and inside a comment a backslash-newline does NOT continue —
+  //    so stripping BEFORE continuation-flattening kills the whole comment.
+  const stripComments = (s) => {
+    let out = '', quote = '', wordStart = true;
+    for (let i = 0; i < s.length; ) {
+      const c = s[i];
+      if (quote === "'") { out += c; if (c === "'") quote = ''; i++; continue; }
+      if (quote === '"') {
+        // inside "…" only \ ` $ " \ form escape pairs; '#' stays literal
+        if (c === '\\' && i + 1 < s.length && '`$"\\'.includes(s[i + 1])) { out += c + s[i + 1]; i += 2; continue; }
+        out += c; if (c === '"') quote = ''; i++; continue;
+      }
+      if (c === '\\' && i + 1 < s.length) { out += c + s[i + 1]; i += 2; wordStart = false; continue; }
+      if (c === '#' && wordStart) { while (i < s.length && s[i] !== '\n') i++; continue; }
+      out += c;
+      wordStart = /\s/.test(c);
+      if (c === "'" || c === '"') quote = c;
+      i++;
+    }
+    return out;
+  };
+
+  // 2) strip line continuations, 3) drop blank lines, 4) join
+  const cleaned = stripComments(String(raw))
     .replace(/\\\s*\n/g, ' ')
     .split('\n')
-    .filter(l => !/^\s*#/.test(l))
+    .filter(l => l.trim())
     .join(' ')
     .trim();
 

@@ -51,6 +51,9 @@ for (const [name, cmd] of CASES) {
     argv0: argv[0] || null,
     argv: argv,
     ngl: ('ngl' in r.cfg) ? r.cfg.ngl : null,
+    unknown: r.unknown || [],
+    temp: ('temp' in r.cfg) ? String(r.cfg.temp) : null,
+    host: ('host' in r.cfg) ? String(r.cfg.host) : null,
     raw: (r.rawArgv || []).join(' ')
   });
 }
@@ -89,6 +92,15 @@ def main():
         ["powershell prompt", "PS C:\\> " + PLAIN],
         ["multiline continuation", MULTILINE],
         ["relative binary", "./build/bin/llama-server -m x.gguf"],
+        # commented-out flags: the '#' toggle must NEVER apply what it hides
+        ["full-line comment", f"{BIN} -m /models/x.gguf\n# -ngl 99\n--temp 0.7"],
+        ["trailing comment", f"{BIN} -m /models/x.gguf --temp 0.7 # keep it simple"],
+        ["commented flag same line", f"{BIN} -m /models/x.gguf # -ngl 99"],
+        ["commented line w backslash", f"{BIN} -m /models/x.gguf\n# --temp 0.9 \\\n--host 0.0.0.0"],
+        ["no-space hash line", f"#-ngl 99\n{BIN} -m /models/x.gguf"],
+        ["hash mid-word path", f"{BIN} -m /models/mod#1.gguf"],
+        ["hash inside quotes", f'{BIN} -m /models/x.gguf --temp 0.7 --grammar "root ::= [#]+"'],
+        ["escaped hash", f"{BIN} -m /models/x.gguf --alias \\#1"],
     ]
 
     script = m.group(1) + "\nconst CASES = " + json.dumps(cases) + ";" + HARNESS
@@ -138,6 +150,30 @@ def main():
 
     ml = res["multiline continuation"]
     check("line continuations flatten", ml["argv0"] == BIN and "32768" in ml["raw"], ml["argv"])
+
+    # commented-out flags must stay OUT: applied to nothing, left in no argv,
+    # and '#' must never reach the unknown-flag warning (the old whole-line
+    # filter leaked trailing comments: "# -ngl 99" APPLIED -ngl 99).
+    for name in ["full-line comment", "trailing comment", "commented flag same line",
+                 "commented line w backslash", "no-space hash line"]:
+        r = res[name]
+        check(f"{name}: no unknown-flag junk from comment", r["unknown"] == [], r["unknown"])
+        check(f"{name}: '#' absent from argv", all(t != "#" for t in r["argv"]), r["argv"])
+    check("full-line comment: real flags survive", res["full-line comment"]["temp"] == "0.7", res["full-line comment"]["raw"])
+    check("commented flag same line: -ngl NOT applied", res["commented flag same line"]["ngl"] is None, res["commented flag same line"]["raw"])
+    back = res["commented line w backslash"]
+    check("commented line w backslash: --temp NOT applied", back["temp"] is None, back["raw"])
+    # the commented --host died with its line; only the LIVE --host survives —
+    # exactly one --host in argv is the proof the commented one did not leak
+    check("commented line w backslash: exactly one (live) --host", back["raw"].count("--host") == 1 and back["host"] == "0.0.0.0", back["raw"])
+    # literal '#' must NOT open a comment where bash keeps it literal
+    path = res["hash mid-word path"]
+    check("hash mid-word path kept", any("mod#1.gguf" in t for t in path["argv"]), path["argv"])
+    q = res["hash inside quotes"]
+    check("hash inside quotes kept", "[#]+" in q["raw"], q["raw"])
+    check("hash inside quotes: '#' not unknown", q["unknown"] == [], q["unknown"])
+    esc = res["escaped hash"]
+    check("escaped hash kept as alias value", "#1" in esc["raw"], esc["raw"])
 
     rel = res["relative binary"]
     check("relative binary kept as typed", rel["argv0"] == "./build/bin/llama-server", rel["argv0"])
