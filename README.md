@@ -23,6 +23,10 @@ one column and the right rail carries the live command preview and the
 ![Llama Loader GUI with the log rail visible: command Preview and the rolling 
 server log on the right](docs/screenshot-logs.jpg)
 
+The log rail is drag-resizable (grab the amber bar between the panels) when the
+long `llama-server` banner in the preview or log needs more room; the width is
+remembered.
+
 ## Features
 
 - **Profile system** - save/load named profiles (model + all settings) to `profiles.json`
@@ -151,6 +155,9 @@ launching. It reports the usual failures in plain text (key not authorized,
 host unreachable, unknown host key).
 
 ### Security notes
+
+See [SECURITY.md](SECURITY.md) for the full policy, scope and how to report a
+vulnerability privately. In short:
 
 - **Nothing is ever killed on a pid file's word alone.** Before signalling,
   the process name on the target is compared with the binary this GUI launched
