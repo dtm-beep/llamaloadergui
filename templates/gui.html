@@ -9,7 +9,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Llama Loader GUI v2</title>
-<!-- Cache buster: 20260919-01 -->
+<!-- Cache buster: 20260919-02 (server security & serving fields, per-build --help flag scan with warnings) -->
 <style>
   :root {
     --bg: #15181d; --surface: #1c2026; --surface2: #232830;
@@ -264,9 +264,10 @@
         <div class="section-body">
           <div class="model-select-wrap field">
             <label>llama-server</label>
-            <select id="llama_server" onchange="updateCommand()" title="Path to the llama-server binary (scanned from ~/ and /mnt/games)"></select>
+            <select id="llama_server" onchange="updateCommand(); loadBinaryFlags()" title="Path to the llama-server binary (scanned from ~/ and /mnt/games)"></select>
             <span id="binaryStatus" style="font-size:10px;color:var(--border);margin-top:2px;display:block;">Scanning builds...</span>
-            <input type="text" id="llama_server_custom" placeholder="Or type custom path..." style="margin-top:4px;width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:inherit;font-size:12px;outline:none;" onchange="(function(el){var s=document.getElementById('llama_server'); if(el.value && !Array.from(s.options).some(function(o){return o.value===el.value;})){var o=document.createElement('option'); o.value=el.value; o.textContent=el.value.split('/').pop()+' (custom)'; s.appendChild(o);} s.value=el.value; updateCommand();})(this)" title="Custom path to llama-server binary (added to the dropdown)"/>
+            <input type="text" id="llama_server_custom" placeholder="Or type custom path..." style="margin-top:4px;width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:inherit;font-size:12px;outline:none;" onchange="(function(el){var s=document.getElementById('llama_server'); if(el.value && !Array.from(s.options).some(function(o){return o.value===el.value;})){var o=document.createElement('option'); o.value=el.value; o.textContent=el.value.split('/').pop()+' (custom)'; s.appendChild(o);} s.value=el.value; updateCommand(); loadBinaryFlags();})(this)" title="Custom path to llama-server binary (added to the dropdown)"/>
+            <div id="flagScanNote" style="font-size:10px;color:var(--muted);margin-top:3px;"></div>
           </div>
           <div class="model-select-wrap field">
             <label>GGUF File</label>
@@ -325,6 +326,81 @@
             <label title="KV unified">KV Unified</label>
             <input type="checkbox" id="kv_unified" title="Use unified KV cache layout (--kv-unified)" onchange="updateCommand()"/>
             <span class="check-label" title="Unified KV cache">KV unified</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Server security & serving (flag sync 2026-09-19 vs upstream arg.cpp; every default is neutral: nothing is emitted unless set) -->
+      <div class="section">
+        <div class="section-header" onclick="toggleSection(this)">Server Security &amp; Serving <span>▾</span></div>
+        <div class="section-body">
+          <div class="field">
+            <label title="API key required on every request">API Key</label>
+            <input type="text" id="api_key" title="Require an API key on every request (--api-key). Stored in plain text inside profiles.json - prefer API Key File on shared machines" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="File holding the API key">API Key File</label>
+            <input type="text" id="api_key_file" title="Read the API key from a file instead of the command line (--api-key-file)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Route prefix for all API endpoints">API Prefix</label>
+            <input type="text" id="api_prefix" placeholder="/llama" title="Serve all API routes below this prefix (--api-prefix)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="TLS private key, serves https">SSL Key File</label>
+            <input type="text" id="ssl_key_file" title="Private key file for https (--ssl-key-file)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="TLS certificate chain">SSL Cert File</label>
+            <input type="text" id="ssl_cert_file" title="Public cert chain file for https (--ssl-cert-file)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Comma-separated allowed origins">CORS Origins</label>
+            <input type="text" id="cors_origins" placeholder="http://127.0.0.1:3000" title="Comma-separated origins allowed in CORS responses (--cors-origins). Empty keeps the builtin default" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Comma-separated allowed headers">CORS Headers</label>
+            <input type="text" id="cors_headers" title="Allowed headers in CORS responses (--cors-headers)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <input type="checkbox" id="cors_credentials" title="Allow cookies/credentials in CORS requests (--cors-credentials)" onchange="updateCommand()"/>
+            <span class="check-label" title="CORS credentials">CORS credentials</span>
+          </div>
+          <div class="field">
+            <input type="checkbox" id="metrics" title="Expose Prometheus metrics on /metrics (--metrics)" onchange="updateCommand()"/>
+            <span class="check-label" title="Prometheus metrics endpoint">Metrics</span>
+          </div>
+          <div class="field">
+            <label title="Swap idle slots out of RAM">Sleep Idle (s)</label>
+            <input type="text" id="sleep_idle_seconds" placeholder="-1" title="Swap a slot out of RAM after this many idle seconds (--sleep-idle-seconds). Empty keeps the builtin default" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="HTTP worker threads">HTTP Threads</label>
+            <input type="text" id="threads_http" title="Number of HTTP worker threads (--threads-http). Empty keeps the builtin default" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <input type="checkbox" id="cache_prompt" checked title="Prompt caching is on by default in llama-server; switching this off emits --no-cache-prompt" onchange="updateCommand()"/>
+            <span class="check-label" title="KV prompt cache (off emits --no-cache-prompt)">Prompt cache</span>
+          </div>
+          <div class="field">
+            <label title="Keep the last N tokens of previous responses in cache">Cache Reuse</label>
+            <input type="text" id="cache_reuse" placeholder="0" title="Keep the last N tokens of previous chat completions in the KV cache (--cache-reuse). Needs Prompt cache on" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="System prompt read from a file">System Prompt File</label>
+            <input type="text" id="system_prompt_file" title="Load the system prompt from a file (--system-prompt-file / -sysf)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Directory for the model router">Models Dir</label>
+            <input type="text" id="models_dir" title="Serve every model under this directory (--models-dir PATH or PATH=NAME). Requires a router-capable build" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <label title="Max loaded models in the router">Models Max</label>
+            <input type="text" id="models_max" title="Maximum number of models kept loaded simultaneously (--models-max)" onchange="updateCommand()"/>
+          </div>
+          <div class="field">
+            <input type="checkbox" id="models_autoload" checked title="Auto-load compatible models from the models dir; switching off emits --no-models-autoload" onchange="updateCommand()"/>
+            <span class="check-label" title="Router auto-load (off emits --no-models-autoload)">Models autoload</span>
           </div>
         </div>
       </div>
@@ -1070,7 +1146,8 @@
           </div>
           <div class="field" style="grid-column:1/-1;">
             <label title="Extra CLI arguments">Extra Args</label>
-            <input type="text" id="extra_args" placeholder="--kv-unified --slot-prompt-similarity 0.8" title="Extra llama-server flags appended verbatim (round-trips any flag not modeled above)" onchange="updateCommand()"/>
+            <input type="text" id="extra_args" list="knownFlags" placeholder="--kv-unified --slot-prompt-similarity 0.8" title="Extra llama-server flags appended verbatim (round-trips any flag not modeled above). Type -- for suggestions from the selected build's own --help" onchange="updateCommand()"/>
+            <datalist id="knownFlags"></datalist>
           </div>
           <div class="sub-header">Misc</div>
           <div class="field">
@@ -1215,6 +1292,7 @@
         <div class="section-header" onclick="toggleSection(this)">Command Preview <button type="button" class="btn btn-sm btn-ghost copy-cmd-btn" onclick="copyCommand(event)" title="Copy the exact command (runnable as shown)">Copy</button> <span>▾</span></div>
         <div class="section-body" style="grid-template-columns:1fr;">
           <div class="command-box" id="commandBox">Loading...</div>
+          <div id="flagWarn" style="display:none;margin-top:6px;padding:8px 10px;border-radius:8px;font-size:11.5px;line-height:1.5;background:rgba(216,178,94,0.12);border:1px solid rgba(216,178,94,0.5);color:var(--yellow,#d8b25e);"></div>
         </div>
       </div>
       <div class="logs-header">
@@ -1303,6 +1381,7 @@ async function init() {
     window.__importedArgv = null;
   }, true);
   try { await loadBinaries(); } catch(e) { console.error('loadBinaries failed', e); }
+  try { loadBinaryFlags(); } catch(e) { console.error('loadBinaryFlags failed', e); }
   try { await refreshProfiles(); console.log('init: profiles loaded'); } catch(e) { console.error('refreshProfiles failed', e); }
   try { updateCommand(); console.log('init: command updated'); } catch(e) { console.error('updateCommand failed', e); }
   try { updateStatus(); console.log('init: status updated'); } catch(e) { console.error('updateStatus failed', e); }
@@ -1360,7 +1439,8 @@ function getCfg() {
     'fit','op_offload','ignore_eos','conversation','single_turn','multiline_input','no_warmup','no_display_prompt',
     'special','backend_sampling','jinja','mmproj_auto','mmproj_offload','check_tensors',
     'log_disable','log_timestamps','offline','no_perf','show_timings','spec_draft_cpu_moe','spec_draft_backend_sampling',
-    'skip_chat_parsing','kv_unified','log_verbose'];
+    'skip_chat_parsing','kv_unified','log_verbose',
+    'cors_credentials','metrics','cache_prompt','models_autoload'];
   // NOTE: any new checkbox MUST be listed above. A checkbox left out is read as
   // el.value, and a checkbox's .value is the literal "on" whether or not it is
   // checked — so the flag gets emitted unconditionally and the checkbox becomes
@@ -1465,6 +1545,7 @@ function updateCommand() {
       renderCommandPreview(box, d.command);
       const ol = document.getElementById('cmdOneline');
       if (ol) ol.textContent = d.command;
+      updateFlagWarn();
     } catch (e) {
       if (box) box.textContent = 'Preview unavailable: ' + e.message;
     }
@@ -1608,8 +1689,81 @@ function renderSidebarProfiles() {
 }
 
 // ── Launch / Stop ──
+// ── Build capability scan ──
+// The GUI asks the SELECTED binary what it knows by running its own --help
+// (server-side, cached by path + mtime). If the previewed command carries a
+// flag this particular build does not advertise (fork drift, older llama.cpp,
+// a new field on an old binary) we warn. We never block: choosing the right
+// parameters for a build stays the user's call.
+let knownFlags = null;
+let knownFlagsPath = '';
+function flagNote(msg) { const n = document.getElementById('flagScanNote'); if (n) n.textContent = msg; }
+async function loadBinaryFlags() {
+  const sel = document.getElementById('llama_server');
+  const path = sel ? sel.value : '';
+  if (!path || path === knownFlagsPath) return;
+  knownFlagsPath = path; knownFlags = null;
+  flagNote('scanning ' + path.split('/').pop() + ' --help...');
+  try {
+    const r = await fetch('/api/binary-flags?path=' + encodeURIComponent(path));
+    const d = await r.json();
+    if (!r.ok) { flagNote('flag scan: ' + (d.error || 'failed')); updateFlagWarn(); return; }
+    if (path !== knownFlagsPath) return;   // binary switched mid-flight
+    knownFlags = d.flags || {};
+    fillKnownFlagsList();
+    flagNote(Object.keys(knownFlags).length + ' flags known in this build (from its --help)');
+  } catch (e) {
+    flagNote('flag scan unavailable');
+  }
+  updateFlagWarn();
+}
+function unknownFlags(cmd) {
+  if (!knownFlags) return [];
+  const has = (n) => Object.prototype.hasOwnProperty.call(knownFlags, n);
+  const out = [];
+  (cmd || '').replace(/\\\n/g, ' ').split(/\s+/).forEach((tok) => {
+    if (!/^--[A-Za-z][A-Za-z0-9_-]*$/.test(tok)) return;   // long flags only
+    const name = tok.slice(2);
+    if (has(name)) return;
+    const neg = name.match(/^no-(.+)$/);
+    if (neg && has(neg[1])) return;                        // --no-x pairs with --x
+    if (!out.includes(name)) out.push(name);
+  });
+  return out;
+}
+function previewUnknown() {
+  // A remote target runs a different binary; a local scan cannot judge it.
+  const rh = (document.getElementById('remote_host').value || '').trim();
+  if (rh) return [];
+  return unknownFlags(document.getElementById('commandBox').textContent || '');
+}
+function updateFlagWarn() {
+  const box = document.getElementById('flagWarn');
+  if (!box) return;
+  const u = previewUnknown();
+  if (!u.length) { box.style.display = 'none'; box.textContent = ''; return; }
+  box.style.display = 'block';
+  box.textContent = 'This build does not advertise ' + u.length + ' flag(s) in its --help: '
+    + u.map((f) => '--' + f).join(', ')
+    + '. Launching still proceeds (the parameters are your call) - remove them if this binary refuses to start.';
+}
+function fillKnownFlagsList() {
+  const dl = document.getElementById('knownFlags');
+  if (!dl || !knownFlags) return;
+  dl.innerHTML = '';
+  Object.keys(knownFlags).sort().forEach((n) => {
+    const o = document.createElement('option');
+    o.value = '--' + n;
+    o.label = knownFlags[n] ? 'takes a value' : 'boolean flag';
+    dl.appendChild(o);
+  });
+}
+
 async function launchServer() {
   const cfg = getCfg();
+  const u = previewUnknown();
+  if (u.length && !confirm('This llama-server build does not advertise:\n  --' + u.join(', --')
+    + '\n\nLaunch anyway? (parameter choice is yours)')) return;
   const r = await fetch('/api/launch', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
   const data = await r.json();
   if (r.ok) { toast('Launched PID ' + data.pid, 'success'); updateStatus(); }
@@ -1697,7 +1851,8 @@ function collapseAdvanced() {
   const collapse = [
     'CPU', 'Model Loading', 'KV Cache', 'RoPE Scaling', 'LoRA & Control Vectors',
     'Speculative Decoding', 'DRY Sampling', 'Adaptive-p & Dynamic Temp',
-    'Mirostat', 'Grammar & JSON Schema', 'Multimodal', 'Override & Debug'
+    'Mirostat', 'Grammar & JSON Schema', 'Multimodal', 'Override & Debug',
+    'Server Security & Serving'
   ];
   document.querySelectorAll('.settings-panel .section-header[onclick]').forEach(hdr => {
     const label = hdr.textContent.replace(/[▾▸]/g, '').trim();
@@ -1818,7 +1973,16 @@ function parseLlamaCommand(raw) {
     escape:{key:'escape',neg:1}, "no-escape":{key:'escape',neg:0},
     "cache-list":{key:'cache_list',neg:1}, "lookup-cache-static":{key:'lookup_cache_static',neg:1},
     "lookup-cache-dynamic":{key:'lookup_cache_dynamic',neg:1}, "slot-prompt-similarity":{key:'slot_prompt_similarity',val:1},
-    "checkpoint-min-step":{key:'checkpoint_min_step',val:1}, "docker-repo":{key:'docker_repo',val:1}
+    "checkpoint-min-step":{key:'checkpoint_min_step',val:1}, "docker-repo":{key:'docker_repo',val:1},
+    "api-key":{key:'api_key',val:1}, "api-key-file":{key:'api_key_file',val:1},
+    "api-prefix":{key:'api_prefix',val:1}, "ssl-key-file":{key:'ssl_key_file',val:1},
+    "ssl-cert-file":{key:'ssl_cert_file',val:1}, "cors-origins":{key:'cors_origins',val:1},
+    "cors-headers":{key:'cors_headers',val:1}, "cors-credentials":{key:'cors_credentials',neg:1}, "no-cors-credentials":{key:'cors_credentials',neg:0},
+    metrics:{key:'metrics',neg:1}, "sleep-idle-seconds":{key:'sleep_idle_seconds',val:1},
+    "threads-http":{key:'threads_http',val:1}, "cache-prompt":{key:'cache_prompt',neg:1}, "no-cache-prompt":{key:'cache_prompt',neg:0},
+    "cache-reuse":{key:'cache_reuse',val:1}, "system-prompt-file":{key:'system_prompt_file',val:1},
+    "models-dir":{key:'models_dir',val:1}, "mdirs":{key:'models_dir',val:1},
+    "models-max":{key:'models_max',val:1}, "models-autoload":{key:'models_autoload',neg:1}, "no-models-autoload":{key:'models_autoload',neg:0}
   };
   // short flag (no leading -) -> long name (no --)
   const SHORT = {
@@ -1839,7 +2003,7 @@ function parseLlamaCommand(raw) {
     bs:'backend-sampling', cram:'cache-ram', dt:'defrag-thold', e:'escape', cl:'cache-list',
     lcs:'lookup-cache-static', lcd:'lookup-cache-dynamic', cms:'checkpoint-min-step',
     sps:'slot-prompt-similarity', cb:'cont-batching', nocb:'no-cont-batching', ag:'agent',
-    v:'verbose', lv:'log-verbosity', ot:'override-tensor', dr:'docker-repo'
+    v:'verbose', lv:'log-verbosity', ot:'override-tensor', dr:'docker-repo', sysf:'system-prompt-file'
   };
   const intFields = ['port','pipeline','ngl','parallel','threads','threads_batch','prio','poll','prio_batch',
     'ctx_size','n_predict','batch','ubatch','keep','main_gpu','fit_ctx','n_cmoe','spec_n_max','spec_n_min',
@@ -2066,7 +2230,11 @@ function serverDefaults() {
     mmproj:'', mmproj_auto:true, mmproj_offload:true, image_min_tokens:'', image_max_tokens:'', media_files:'',
     override_tensor:'', override_kv:'', check_tensors:false,
     log_file:'', log_colors:'auto', log_verbosity:1, log_verbose:false, log_disable:false,
-    log_prefix:true, log_timestamps:false, offline:false, no_perf:false, show_timings:true
+    log_prefix:true, log_timestamps:false, offline:false, no_perf:false, show_timings:true,
+    api_key:'', api_key_file:'', api_prefix:'', ssl_key_file:'', ssl_cert_file:'',
+    cors_origins:'', cors_headers:'', cors_credentials:false, metrics:false,
+    sleep_idle_seconds:'', threads_http:'', cache_prompt:true, cache_reuse:'',
+    system_prompt_file:'', models_dir:'', models_max:'', models_autoload:true
   };
 }
 
@@ -2131,6 +2299,13 @@ const FLAG = {
   model_url:'--model-url / -mu', env:'(not a flag — process environment)', exec_prefix:'(not a flag — command wrapper)',
   host:'--host', port:'--port', pipeline:'pipeline stages (server arg)', parallel:'--parallel / -np', alias:'--alias / -a',
   kv_unified:'--kv-unified / -kvu',
+  api_key:'--api-key', api_key_file:'--api-key-file', api_prefix:'--api-prefix',
+  ssl_key_file:'--ssl-key-file', ssl_cert_file:'--ssl-cert-file',
+  cors_origins:'--cors-origins', cors_headers:'--cors-headers', cors_credentials:'--cors-credentials',
+  metrics:'--metrics', sleep_idle_seconds:'--sleep-idle-seconds', threads_http:'--threads-http',
+  cache_prompt:'emits --no-cache-prompt when off', cache_reuse:'--cache-reuse',
+  system_prompt_file:'--system-prompt-file / -sysf',
+  models_dir:'--models-dir', models_max:'--models-max', models_autoload:'emits --no-models-autoload when off',
   threads:'--threads / -t', threads_batch:'--threads-batch / -tb', prio:'--prio', prio_batch:'--prio-batch', poll:'--poll',
   cpu_mask:'--cpu-mask / -C', cpu_range:'--cpu-range / -Cr', cpu_strict:'--cpu-strict',
   cpu_mask_batch:'--cpu-mask-batch / -Cb', cpu_range_batch:'--cpu-range-batch / -Crb', cpu_strict_batch:'--cpu-strict-batch',

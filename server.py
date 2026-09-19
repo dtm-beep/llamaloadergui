@@ -187,6 +187,72 @@ def exec_wrapper(cfg: dict) -> list:
     return shlex.split(raw) if raw else []
 
 
+# ── Per-binary flag scan (llama-server --help) ─────────────────
+# Builds drift: forks (llamaDTM, ik_llama.cpp, buun) and 2026 builds accept
+# flags older ones reject, and vice versa. Instead of pretending one flag set
+# fits all, the GUI asks the SELECTED binary what it understands and warns
+# (never blocks) when the command uses something it does not know.
+_HELP_CACHE: dict = {}   # "path|mtime" -> {"flags": {...}, "version": str}
+
+
+def parse_help_flags(text: str) -> dict:
+    """Parse `llama-server --help` output into {longname: has_value}.
+
+    Help lines look like `-n,    --predict, --n-predict N   description...`.
+    A flag takes a value when a metavar (N, KEY, [on|off|auto], {a,b}, lo-hi,
+    PATHNAME...) sits between the last flag token and the description column.
+    Descriptions start lower-case; metavars never do, except `lo-hi`.
+    """
+    flags: dict = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("-"):
+            continue
+        tokens = stripped.split()
+        i, names = 0, []
+        while i < len(tokens):
+            raw = tokens[i]
+            tok = raw.rstrip(",")
+            if not re.fullmatch(r"-{1,2}[A-Za-z][A-Za-z0-9_-]*", tok):
+                break
+            names.append(tok.lstrip("-"))
+            i += 1
+            if not raw.endswith(","):   # comma-joined aliases keep parsing
+                break
+        if not names:
+            continue
+        metavar = False
+        if i < len(tokens):
+            nxt = tokens[i]
+            metavar = bool(re.match(r"^[A-Z[<{]", nxt)) or nxt == "lo-hi"
+        for name in names:
+            if len(name) > 1:  # long form only; short forms collide with prose
+                flags[name] = metavar
+    return flags
+
+
+def binary_flags(path: str, min_flags: int = 30) -> dict:
+    """Run `--help` on the given binary and return its flag table (cached).
+
+    min_flags guards against junk output (a wrong path that still executes,
+    a wrapper printing an error); a real llama-server --help lists hundreds.
+    """
+    p = Path(path).expanduser()
+    key = f"{p}|{p.stat().st_mtime if p.exists() else 0}|{min_flags}"
+    if key in _HELP_CACHE:
+        return _HELP_CACHE[key]
+    if not p.is_file():
+        raise ValueError(f"binary not found: {p}")
+    proc = subprocess.run([str(p), "--help"], capture_output=True, text=True, timeout=15)
+    out = proc.stdout + proc.stderr
+    first = next((line.strip() for line in out.splitlines() if line.strip()), "")
+    result = {"flags": parse_help_flags(out), "version": first[:120]}
+    if len(result["flags"]) < min_flags:
+        raise ValueError("could not parse --help output (is this llama-server?)")
+    _HELP_CACHE[key] = result
+    return result
+
+
 def _resolve_server(raw) -> str:
     """Normalize the llama-server binary path (empty/relative -> known default)."""
     raw = str(raw or "").strip()
@@ -546,6 +612,45 @@ def build_argv(cfg: dict) -> list:
     if cfg.get("show_timings") is False:
         _add(parts, "--no-show-timings")
 
+    # Server security. All opt-in: nothing is emitted at the neutral default,
+    # so saving a profile never injects a flag an older binary would reject.
+    if cfg.get("api_key"):
+        _add(parts, "--api-key", cfg["api_key"])
+    if cfg.get("api_key_file"):
+        _add(parts, "--api-key-file", cfg["api_key_file"])
+    if cfg.get("api_prefix"):
+        _add(parts, "--api-prefix", cfg["api_prefix"])
+    if cfg.get("ssl_key_file"):
+        _add(parts, "--ssl-key-file", cfg["ssl_key_file"])
+    if cfg.get("ssl_cert_file"):
+        _add(parts, "--ssl-cert-file", cfg["ssl_cert_file"])
+    if cfg.get("cors_origins"):
+        _add(parts, "--cors-origins", cfg["cors_origins"])
+    if cfg.get("cors_headers"):
+        _add(parts, "--cors-headers", cfg["cors_headers"])
+    if cfg.get("cors_credentials"):
+        _add(parts, "--cors-credentials")
+    if cfg.get("metrics"):
+        _add(parts, "--metrics")
+
+    # Serving / router.
+    if cfg.get("sleep_idle_seconds") != "":
+        _add(parts, "--sleep-idle-seconds", cfg["sleep_idle_seconds"])
+    if cfg.get("threads_http") != "":
+        _add(parts, "--threads-http", cfg["threads_http"])
+    if cfg.get("cache_prompt") is False:
+        _add(parts, "--no-cache-prompt")
+    if cfg.get("cache_reuse") != "":
+        _add(parts, "--cache-reuse", cfg["cache_reuse"])
+    if cfg.get("system_prompt_file"):
+        _add(parts, "--system-prompt-file", cfg["system_prompt_file"])
+    if cfg.get("models_dir"):
+        _add(parts, "--models-dir", cfg["models_dir"])
+    if cfg.get("models_max") != "":
+        _add(parts, "--models-max", cfg["models_max"])
+    if cfg.get("models_autoload") is False:
+        _add(parts, "--no-models-autoload")
+
     # Verbatim passthrough for flags not modeled by a dedicated form field.
     # shlex.split restores the quoting we preserved when parsing, so each flag
     # re-joins exactly as it was imported (e.g. --chat-template-kwargs '{...}').
@@ -832,6 +937,30 @@ class Config(BaseModel):
     no_perf: bool = False
     show_timings: bool = True
 
+    # Server security (flag sync 2026-09-19 vs upstream arg.cpp).
+    # Every default here is NEUTRAL: nothing is emitted unless the user sets
+    # it, so a profile stays launchable on older builds that lack the flag.
+    # NOTE: profiles.json stores these in plain text (SECURITY.md).
+    api_key: str = ""
+    api_key_file: str = ""
+    api_prefix: str = ""
+    ssl_key_file: str = ""
+    ssl_cert_file: str = ""
+    cors_origins: str = ""
+    cors_headers: str = ""
+    cors_credentials: bool = False
+    metrics: bool = False
+
+    # Serving / router (same neutral rule)
+    sleep_idle_seconds: str = ""
+    threads_http: str = ""
+    cache_prompt: bool = True          # llama-server default: on; only --no-cache-prompt is emitted
+    cache_reuse: str = ""
+    system_prompt_file: str = ""
+    models_dir: str = ""
+    models_max: str = ""
+    models_autoload: bool = True       # default on; only --no-models-autoload is emitted
+
 
 _CONFIG_DEFAULTS: dict = {}
 
@@ -1109,6 +1238,24 @@ async def api_build_command(cfg: Config):
 @app.get("/api/info")
 async def api_info():
     return JSONResponse({"home": str(Path.home()), "default_binary": str(LLAMA_SERVER)})
+
+
+@app.get("/api/binary-flags")
+async def api_binary_flags(path: str):
+    """What the SELECTED binary accepts (from its own --help, cached).
+
+    The GUI execs this binary on launch anyway, so running `--help` adds no
+    capability; it just tells the frontend which flags the build knows so it
+    can warn about drift instead of silently failing at launch.
+    """
+    resolved = _resolve_server(path)
+    try:
+        data = binary_flags(resolved)
+    except subprocess.TimeoutExpired:
+        return JSONResponse({"error": "--help timed out"}, status_code=502)
+    except (ValueError, OSError) as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return JSONResponse({"path": resolved, "flags": data["flags"], "version": data["version"]})
 
 
 @app.post("/api/ssh-test")
