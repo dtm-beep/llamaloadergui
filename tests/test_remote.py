@@ -171,15 +171,13 @@ async def main():
 
     # ── injection attempts rejected before ssh is ever called ──
     for bad in ["host; rm -rf /", "$(curl evil)", "`x`", "host\nnewline", "|sh", "a&&b"]:
-        try:
-            server._remote_target({"remote_host": bad, "remote_bin": "/bin/true"})
-            check(f"injection rejected: {bad!r}", False)
-        except ValueError:
-            check(f"injection rejected: {bad!r}", True)
+        t, err = server._remote_target({"remote_host": bad, "remote_bin": "/bin/true"})
+        check(f"injection rejected: {bad!r}", t is None and err is not None)
 
     # ── local mode untouched ──
     install(FakeTarget())
-    check("local: no remote target when host empty", server._remote_target({"remote_host": ""}) is None)
+    t, err = server._remote_target({"remote_host": ""})
+    check("local: no remote target when host empty", t is None and err is None)
 
     print("\n" + ("ALL PASS" if FAIL == 0 else f"{FAIL} FAILURE(S)"))
     return 1 if FAIL else 0

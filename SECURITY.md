@@ -28,6 +28,9 @@ as if it were a network service.
   process name on the target is compared with the binary this GUI launched
   (`/proc/<pid>/comm`, truncated the way Linux reports it). A recycled PID makes
   Stop refuse rather than kill a stranger.
+- **API error responses are curated, never raw.** Bad input gets a fixed
+  validation message; exception details (paths, OS errors) go to the server
+  log only, so the loopback API leaks no stack traces or internals.
 - **Key-based SSH only.** Remote calls run with `BatchMode=yes`: no password
   prompts, no credential storage, no fallback to interactive auth.
 - **No telemetry, no outbound requests.** The only things this program connects

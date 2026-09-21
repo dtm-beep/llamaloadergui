@@ -5,6 +5,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import re
 import shlex
@@ -16,6 +17,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResponse
 from typing import Optional
 from pydantic import BaseModel, Field
+
+log = logging.getLogger("llamaloader")
 
 # No CORS middleware on purpose: the UI is same-origin, and a wildcard
 # ("allow_origins=['*']") would let any webpage in the user's browser POST
@@ -237,6 +240,9 @@ def binary_flags(path: str, min_flags: int = 30) -> dict:
     min_flags guards against junk output (a wrong path that still executes,
     a wrapper printing an error); a real llama-server --help lists hundreds.
     """
+    # codeql[py/path-injection] suppressed - same single-user trust decision as
+    # _resolve_server(): the path is the local user's own binary choice, and
+    # is_file()/min_flags below gate it; the GUI serves 127.0.0.1 only.
     p = Path(path).expanduser()
     key = f"{p}|{p.stat().st_mtime if p.exists() else 0}|{min_flags}"
     if key in _HELP_CACHE:
@@ -254,10 +260,22 @@ def binary_flags(path: str, min_flags: int = 30) -> dict:
 
 
 def _resolve_server(raw) -> str:
-    """Normalize the llama-server binary path (empty/relative -> known default)."""
+    """Normalize the llama-server binary path (empty/relative -> known default).
+
+    The path is a user-provided *design feature* of this GUI: it selects the
+    binary the user is about to launch anyway. The server binds to 127.0.0.1
+    only (single-user trust boundary: anyone who can reach this API is a
+    logged-in user on this machine, who can exec any binary directly).
+    Input is still normalized: NUL bytes and control characters are rejected,
+    relative paths resolve under $HOME, never under an attacker-chosen root.
+    """
     raw = str(raw or "").strip()
     if not raw:
         return str(LLAMA_SERVER)
+    if any(ord(c) < 32 or ord(c) == 127 for c in raw):
+        raise ValueError("binary path contains control characters")
+    # codeql[py/path-injection] suppressed - local-only GUI (127.0.0.1), the
+    # binary path is the user's own launch choice; see docstring and SECURITY.md.
     p = Path(raw).expanduser()
     return str(p if p.is_absolute() else (Path.home() / p).resolve())
 
@@ -1011,23 +1029,28 @@ SSH_RE = re.compile(r"^[A-Za-z0-9_.@:+-]+$")       # user@host / host / ipv6-zon
 REMOTE_DIR = "~/.llamaloader"
 
 
-def _remote_target(d: dict) -> dict | None:
-    """Validate remote fields; None = local launch. Raises ValueError (400)."""
+def _remote_target(d: dict) -> tuple[dict | None, str | None]:
+    """Validate remote fields. Returns (target, error); (None, None) = local launch.
+
+    Validation problems come back as a curated error string instead of an
+    exception, so callers never turn a caught exception's message into an API
+    response (no stack-trace/exception-info exposure, CodeQL py/stack-trace-exposure).
+    """
     host = str(d.get("remote_host") or "").strip()
     if not host:
-        return None
+        return None, None
     if not SSH_RE.match(host):
-        raise ValueError(f"Invalid SSH target: {host!r} (allowed: [user@]host)")
+        return None, "Invalid SSH target (allowed: [user@]host, no spaces or shell metacharacters)"
     try:
         ssh_port = int(d.get("remote_ssh_port") or 22)
     except (TypeError, ValueError):
-        raise ValueError("Invalid SSH port")
+        return None, "Invalid SSH port"
     rb = str(d.get("remote_bin") or "").strip()
     rb = rb if rb.startswith(("/", "~", "./")) else ("~/" + rb)
     workdir = str(d.get("remote_workdir") or "").strip() or None
     if workdir and not workdir.startswith(("/", "~", "./")):
-        raise ValueError(f"Invalid remote workdir: {workdir!r} (must be an absolute path)")
-    return {"host": host, "ssh_port": ssh_port, "bin": rb, "workdir": workdir}
+        return None, "Invalid remote workdir (must be an absolute path)"
+    return {"host": host, "ssh_port": ssh_port, "bin": rb, "workdir": workdir}, None
 
 
 def _ssh_base(t: dict) -> list:
@@ -1221,10 +1244,9 @@ async def api_delete_profile(name: str):
 async def api_build_command(cfg: Config):
     d = cfg.model_dump()
     argv = _verbatim_argv(d) or build_argv(d)
-    try:
-        t = _remote_target(d)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+    t, err = _remote_target(d)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
     if t:
         argv = [t["bin"], *argv[1:]]
         return JSONResponse({
@@ -1253,18 +1275,21 @@ async def api_binary_flags(path: str):
         data = binary_flags(resolved)
     except subprocess.TimeoutExpired:
         return JSONResponse({"error": "--help timed out"}, status_code=502)
-    except (ValueError, OSError) as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+    except (ValueError, OSError):
+        # Static messages only: the underlying error text (paths, OS details)
+        # stays in the server log, never echoed to the API client.
+        log.warning("binary-flags scan failed for a client-requested path", exc_info=True)
+        return JSONResponse({"error": "flag scan failed: binary not readable or not a llama-server build"},
+                            status_code=400)
     return JSONResponse({"path": resolved, "flags": data["flags"], "version": data["version"]})
 
 
 @app.post("/api/ssh-test")
 async def api_ssh_test(payload: dict):
     host = str(payload.get("remote_host") or "").strip()
-    try:
-        t = _remote_target({**payload, "remote_host": host})
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+    t, err = _remote_target({**payload, "remote_host": host})
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
     if not t:
         return JSONResponse({"error": "Fill in the SSH target first"}, status_code=400)
     if not shutil.which("ssh"):
@@ -1309,10 +1334,9 @@ async def api_launch(cfg: Config):
     argv = _verbatim_argv(d) or build_argv(d)
 
     # ── Remote branch: detached launch over SSH ──
-    try:
-        t = _remote_target(d)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+    t, err = _remote_target(d)
+    if err:
+        return JSONResponse({"error": err}, status_code=400)
     if t:
         if not shutil.which("ssh"):
             return JSONResponse({"error": "ssh client not found on PATH"}, status_code=400)
@@ -1387,7 +1411,12 @@ async def api_stop(request: Request):
     except Exception:
         pass
     # Remote: terminate by the pidfile this GUI (or a previous run of it) wrote.
-    t = _remote_target(d) if d.get("remote_host") else running_server.get("remote")
+    if d.get("remote_host"):
+        t, err = _remote_target(d)
+        if err:
+            return JSONResponse({"error": err}, status_code=400)
+    else:
+        t = running_server.get("remote")
     if t and not t.get("bin"):
         mem = _remembered(t["host"], t["ssh_port"])
         if mem:
@@ -1432,11 +1461,10 @@ async def api_status(port: int = 8080, remote_host: str = "", remote_ssh_port: i
     hand, so the TCP probe runs from this machine against host:port."""
     global running_server
     if remote_host:
-        try:
-            t = _remote_target({"remote_host": remote_host, "remote_ssh_port": remote_ssh_port,
-                                "remote_bin": remote_bin})
-        except ValueError as e:
-            return JSONResponse({"error": str(e)}, status_code=400)
+        t, err = _remote_target({"remote_host": remote_host, "remote_ssh_port": remote_ssh_port,
+                                 "remote_bin": remote_bin})
+        if err:
+            return JSONResponse({"error": err}, status_code=400)
         if not str(remote_bin or "").strip():
             mem = _remembered(t["host"], t["ssh_port"])
             if mem:
@@ -1460,11 +1488,10 @@ async def api_logs(limit: int = 50, remote_host: str = "", remote_ssh_port: int 
     limit = max(1, min(int(limit), 1000))
     if remote_host:
         # Remote log lives on the target  -  tail it there and ship the text.
-        try:
-            t = _remote_target({"remote_host": remote_host, "remote_ssh_port": remote_ssh_port,
-                                "remote_bin": remote_bin})
-        except ValueError as e:
-            return JSONResponse({"error": str(e)}, status_code=400)
+        t, err = _remote_target({"remote_host": remote_host, "remote_ssh_port": remote_ssh_port,
+                                 "remote_bin": remote_bin})
+        if err:
+            return JSONResponse({"error": err}, status_code=400)
         log, _ = _remote_files(t, port)
         rc, out, err = await _run_ssh(t, f"tail -n {limit} {log} 2>/dev/null", timeout=15)
         if rc != 0:
