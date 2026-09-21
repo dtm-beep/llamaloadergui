@@ -242,7 +242,7 @@ def binary_flags(path: str, min_flags: int = 30) -> dict:
     """
     # Same single-user trust decision as _resolve_server(): the path is the
     # local user's own binary choice, gated by is_file()/min_flags below.
-    p = Path(path).expanduser()  # codeql[py/path-injection] suppressed: see _resolve_server and SECURITY.md
+    p = Path(path).expanduser()  # codeql[py/path-injection] suppressed
     key = f"{p}|{p.stat().st_mtime if p.exists() else 0}|{min_flags}"
     if key in _HELP_CACHE:
         return _HELP_CACHE[key]
@@ -275,7 +275,7 @@ def _resolve_server(raw) -> str:
         raise ValueError("binary path contains control characters")
     # Local-only GUI (127.0.0.1): the binary path is the user's own launch
     # choice, the same one the GUI execs on Start.
-    p = Path(raw).expanduser()  # codeql[py/path-injection] suppressed: trust model documented in docstring and SECURITY.md
+    p = Path(raw).expanduser()  # codeql[py/path-injection] suppressed
     return str(p if p.is_absolute() else (Path.home() / p).resolve())
 
 
