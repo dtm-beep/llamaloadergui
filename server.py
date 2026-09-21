@@ -240,10 +240,9 @@ def binary_flags(path: str, min_flags: int = 30) -> dict:
     min_flags guards against junk output (a wrong path that still executes,
     a wrapper printing an error); a real llama-server --help lists hundreds.
     """
-    # codeql[py/path-injection] suppressed - same single-user trust decision as
-    # _resolve_server(): the path is the local user's own binary choice, and
-    # is_file()/min_flags below gate it; the GUI serves 127.0.0.1 only.
-    p = Path(path).expanduser()
+    # Same single-user trust decision as _resolve_server(): the path is the
+    # local user's own binary choice, gated by is_file()/min_flags below.
+    p = Path(path).expanduser()  # codeql[py/path-injection] suppressed: see _resolve_server and SECURITY.md
     key = f"{p}|{p.stat().st_mtime if p.exists() else 0}|{min_flags}"
     if key in _HELP_CACHE:
         return _HELP_CACHE[key]
@@ -274,9 +273,9 @@ def _resolve_server(raw) -> str:
         return str(LLAMA_SERVER)
     if any(ord(c) < 32 or ord(c) == 127 for c in raw):
         raise ValueError("binary path contains control characters")
-    # codeql[py/path-injection] suppressed - local-only GUI (127.0.0.1), the
-    # binary path is the user's own launch choice; see docstring and SECURITY.md.
-    p = Path(raw).expanduser()
+    # Local-only GUI (127.0.0.1): the binary path is the user's own launch
+    # choice, the same one the GUI execs on Start.
+    p = Path(raw).expanduser()  # codeql[py/path-injection] suppressed: trust model documented in docstring and SECURITY.md
     return str(p if p.is_absolute() else (Path.home() / p).resolve())
 
 
